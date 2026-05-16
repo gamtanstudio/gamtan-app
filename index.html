@@ -3460,6 +3460,7 @@ function matchesQuery(b, query) {
 
 function renderList() {
   const el = document.getElementById('booking-list');
+  if(!el) return; // DOM 아직 준비 안 됐으면 무시
   // 단계 필터 활성화 시 → 별도 뷰로 표시
   if(stageFilter === 'unpaid') { renderListByUnpaid(el); return; }
   if(stageFilter !== null) { renderListByStageFilter(el); return; }
@@ -5608,7 +5609,12 @@ document.getElementById('today-label').textContent = fmtDateKo(new Date().toISOS
   // 초기 상태를 history에 심기 (뒤로가기 기준점) — 복원할 뷰로 심어야 새로고침 후 뒤로가기가 정상 동작
   history.replaceState({ view: savedView }, '');
 
-  setView(savedView);
+  // cust 뷰는 setView 대신 직접 처리 (setView가 renderList를 너무 일찍 호출하는 문제 방지)
+  if(savedView === 'cust') {
+    currentView = 'cust';
+  } else {
+    setView(savedView);
+  }
 
   if(savedView === 'cust' && savedCustName) {
     setTimeout(()=>{
