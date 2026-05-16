@@ -5554,7 +5554,7 @@ document.getElementById('today-label').textContent = fmtDateKo(new Date().toISOS
   const savedCustName = sessionStorage.getItem('gamtan_cust_detail');
 
   // 초기 상태를 history에 심기 (뒤로가기 기준점)
-  history.replaceState({ view: 'month' }, '');
+  history.replaceState({ view: savedView }, '');
 
   setView(savedView);
 
