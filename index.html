@@ -5297,6 +5297,41 @@ async function handlePhotoFiles(custName, files, bookingId) {
   // 고객카드 사진 갱신
   const cpEl = document.getElementById('cust-photo-section-'+enc);
   if(cpEl) cpEl.outerHTML = buildCustPhotoSection(custName);
+  // 히스토리 카드 사진 섹션 갱신 (bookingId가 있는 경우 해당 카드만, 없으면 전체)
+  if(bookingId) {
+    refreshHistCardPhotos(custName, bookingId);
+  } else {
+    const allBks = bookings.filter(b=>b.name===custName);
+    allBks.forEach(b => refreshHistCardPhotos(custName, b.id));
+  }
+}
+
+function refreshHistCardPhotos(custName, bid) {
+  const detailEl = document.getElementById('hist-detail-'+bid);
+  if(!detailEl) return;
+  const safeName = custName.replace(/'/g,"\\'");
+  const name = custName;
+  const bPhotos = (photoCache[name]||[]).filter(p => p.bookingId === bid);
+  const newHtml = bPhotos.length ? `
+    <div id="hist-photo-${bid}" style="margin-top:8px;padding-top:8px;border-top:1px solid #f5f5f5">
+      <div style="font-size:10px;color:#888;margin-bottom:5px">📷 이 방문 사진 (${bPhotos.length}장)</div>
+      <div style="display:flex;gap:5px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch">
+        ${bPhotos.map((p,i)=>`<img src="${p.thumb}" style="width:60px;height:60px;object-fit:cover;border-radius:7px;cursor:pointer;flex-shrink:0;border:1.5px solid #e8e8e8" onclick="openLightbox('${safeName}',${(photoCache[name]||[]).indexOf(p)})" title="${p.filename||''}">`).join('')}
+        <label style="width:60px;height:60px;border:2px dashed #ddd;border-radius:7px;cursor:pointer;display:flex;align-items:center;justify-content:center;background:#fff;flex-shrink:0;color:#ccc;font-size:20px">
+          ＋<input type="file" accept="image/*" multiple onchange="handlePhotoFiles('${safeName}',this.files,'${bid}');this.value=''" style="display:none">
+        </label>
+      </div>
+    </div>` : `
+    <div id="hist-photo-${bid}" style="margin-top:8px;padding-top:8px;border-top:1px solid #f5f5f5;display:flex;align-items:center;gap:6px">
+      <span style="font-size:10px;color:#bbb">📷 이 방문 사진 없음</span>
+      <label style="font-size:10px;color:#6366f1;cursor:pointer;border:1px dashed #a5b4fc;border-radius:5px;padding:2px 7px">
+        ＋ 추가<input type="file" accept="image/*" multiple onchange="handlePhotoFiles('${safeName}',this.files,'${bid}');this.value=''" style="display:none">
+      </label>
+    </div>`;
+  const existing = document.getElementById('hist-photo-'+bid);
+  if(existing) {
+    existing.outerHTML = newHtml;
+  }
 }
 
 async function confirmDeletePhoto(custName, photoId) {
@@ -5896,7 +5931,7 @@ function showCustDetail(name) {
     // 예약별 사진 (bookingId로 필터)
     const bPhotos = (photoCache[name]||[]).filter(p => p.bookingId === b.id);
     const bPhotoHtml = bPhotos.length ? `
-      <div style="margin-top:8px;padding-top:8px;border-top:1px solid #f5f5f5">
+      <div id="hist-photo-${b.id}" style="margin-top:8px;padding-top:8px;border-top:1px solid #f5f5f5">
         <div style="font-size:10px;color:#888;margin-bottom:5px">📷 이 방문 사진 (${bPhotos.length}장)</div>
         <div style="display:flex;gap:5px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch">
           ${bPhotos.map((p,i)=>`<img src="${p.thumb}" style="width:60px;height:60px;object-fit:cover;border-radius:7px;cursor:pointer;flex-shrink:0;border:1.5px solid #e8e8e8" onclick="openLightbox('${safeName}',${(photoCache[name]||[]).indexOf(p)})" title="${p.filename||''}">`).join('')}
@@ -5905,7 +5940,7 @@ function showCustDetail(name) {
           </label>
         </div>
       </div>` : `
-      <div style="margin-top:8px;padding-top:8px;border-top:1px solid #f5f5f5;display:flex;align-items:center;gap:6px">
+      <div id="hist-photo-${b.id}" style="margin-top:8px;padding-top:8px;border-top:1px solid #f5f5f5;display:flex;align-items:center;gap:6px">
         <span style="font-size:10px;color:#bbb">📷 이 방문 사진 없음</span>
         <label style="font-size:10px;color:#6366f1;cursor:pointer;border:1px dashed #a5b4fc;border-radius:5px;padding:2px 7px">
           ＋ 추가<input type="file" accept="image/*" multiple onchange="handlePhotoFiles('${safeName}',this.files,'${b.id}');this.value=''" style="display:none">
