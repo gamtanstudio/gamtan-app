@@ -312,6 +312,22 @@ body{font-family:'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif
   /* 워크플로우 */
   #workflow{padding:0}
   #cust-card{padding:12px 14px}
+  /* 고객카드 히스토리 헤더 — 좁은 화면에서 메모 input이 삐져나오지 않게 */
+  #workflow [style*="display:flex;align-items:center;gap:6px;padding:10px 12px;cursor:pointer;flex-wrap:nowrap"] {
+    flex-wrap:wrap !important;
+  }
+  /* 액션버튼 행 */
+  #workflow [style*="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap"] > button {
+    flex: 1 1 auto;
+    min-width: 70px;
+  }
+  /* 고객 헤더 전화번호·이메일 배지 줄바꿈 허용 */
+  #workflow [style*="display:flex;flex-wrap:wrap;gap:4px"] > * {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 @media (max-width: 400px) {
   .mc-cell{min-height:54px;padding:2px}
@@ -3051,7 +3067,7 @@ function applyNavState(state) {
 
 function _applyView(v, custName, bookingId) {
   currentView = v;
-  sessionStorage.setItem('gamtan_view', v);
+  localStorage.setItem('gamtan_view', v);
   sessionStorage.setItem('gamtan_cal_pos', JSON.stringify({y:calYear,m:calMonth,d:selectedCalDate}));
   const isMonth = v === 'month';
   document.getElementById('month-cal').classList.toggle('mc-active', isMonth);
@@ -3091,7 +3107,7 @@ window.addEventListener('popstate', function(e) {
 
 function setView(v) {
   currentView = v;
-  sessionStorage.setItem('gamtan_view', v);
+  localStorage.setItem('gamtan_view', v);
   sessionStorage.setItem('gamtan_cal_pos', JSON.stringify({y:calYear,m:calMonth,d:selectedCalDate}));
 
   const isMonth = v === 'month';
@@ -3891,7 +3907,7 @@ function bookingCard(b) {
 
 function selectBooking(id) {
   selectedId = id;
-  sessionStorage.setItem('gamtan_selected_id', id);
+  localStorage.setItem('gamtan_selected_id', id);
   const b = bookings.find(x=>x.id===id);
   renderList();
   if(b) {
@@ -3912,7 +3928,7 @@ function selectBooking(id) {
 function mobileGoBack() {
   document.getElementById('right').classList.remove('mobile-show');
   selectedId = null;
-  sessionStorage.removeItem('gamtan_selected_id');
+  localStorage.removeItem('gamtan_selected_id');
   renderList();
 }
 
@@ -5132,11 +5148,42 @@ function mcOpenMemo(ds) {
   }, 200);
 }
 
-// ====================== 사진 관리 (IndexedDB) ======================
+// ====================== 사진 관리 (IndexedDB + Google Drive 썸네일) ======================
 let photoDB = null;
-let photoCache = {}; // custName → [{id, custName, thumb, full, filename, uploadedAt}]
+let photoCache = {}; // custName → [{id, custName, thumb, full, filename, uploadedAt, driveId}]
 let lightboxPhotos = [];
 let lightboxIdx = 0;
+
+// ── Drive 썸네일 연동 ──
+// GAS_URL 을 공유: action='savePhoto' / 'deletePhoto' / 'listPhotos'
+async function driveUploadThumb(custName, thumbDataUrl, filename, localId) {
+  try {
+    const res = await fetch(GAS_URL, {
+      method: 'POST', mode: 'no-cors',
+      headers: {'Content-Type': 'text/plain'},
+      body: JSON.stringify({
+        action: 'savePhoto',
+        custName,
+        filename,
+        localId: String(localId),
+        thumbData: thumbDataUrl
+      })
+    });
+    // no-cors 응답은 opaque → driveId 확인 불가, 무시하고 성공 처리
+  } catch(e) { /* 오프라인 → 로컬만 저장, 나중에 자동 재시도 없음 */ }
+}
+
+async function driveDeleteThumb(driveFileId) {
+  if (!driveFileId) return;
+  try {
+    await fetch(GAS_URL, {
+      method: 'POST', mode: 'no-cors',
+      headers: {'Content-Type': 'text/plain'},
+      body: JSON.stringify({ action: 'deletePhoto', driveFileId })
+    });
+  } catch(e) {}
+}
+// ── Drive 연동 끝 ──
 
 function initPhotoDB() {
   return new Promise((resolve) => {
@@ -5175,12 +5222,14 @@ function loadAllPhotosToCache() {
 function savePhotoToDB(custName, thumb, full, filename, bookingId) {
   return new Promise((resolve, reject) => {
     if(!photoDB) { reject('DB not ready'); return; }
-    const record = {custName, thumb, full, filename, uploadedAt: Date.now(), bookingId: bookingId||null};
+    const record = {custName, thumb, full, filename, uploadedAt: Date.now(), bookingId: bookingId||null, driveId: null};
     const req = photoDB.transaction('photos','readwrite').objectStore('photos').add(record);
     req.onsuccess = () => {
       record.id = req.result;
       if(!photoCache[custName]) photoCache[custName] = [];
       photoCache[custName].push(record);
+      // Drive에 썸네일 비동기 업로드 (실패해도 로컬은 유지)
+      driveUploadThumb(custName, thumb, filename, record.id);
       resolve(record);
     };
     req.onerror = () => reject(req.error);
@@ -5190,6 +5239,9 @@ function savePhotoToDB(custName, thumb, full, filename, bookingId) {
 function deletePhotoFromDB(custName, photoId) {
   return new Promise(resolve => {
     if(!photoDB) { resolve(); return; }
+    // Drive 삭제 (driveId 있을 때만)
+    const photo = (photoCache[custName]||[]).find(p=>p.id===photoId);
+    if(photo && photo.driveId) driveDeleteThumb(photo.driveId);
     const tx = photoDB.transaction('photos','readwrite');
     tx.objectStore('photos').delete(photoId);
     tx.oncomplete = () => {
@@ -5549,11 +5601,11 @@ document.getElementById('today-label').textContent = fmtDateKo(new Date().toISOS
 
 // ── F5 후 이전 상태 복원 ──
 (function restoreLastState() {
-  const savedView     = sessionStorage.getItem('gamtan_view') || 'month';
-  const savedSelId    = sessionStorage.getItem('gamtan_selected_id');
-  const savedCustName = sessionStorage.getItem('gamtan_cust_detail');
+  const savedView     = localStorage.getItem('gamtan_view') || 'month';
+  const savedSelId    = localStorage.getItem('gamtan_selected_id');
+  const savedCustName = localStorage.getItem('gamtan_cust_detail');
 
-  // 초기 상태를 history에 심기 (뒤로가기 기준점)
+  // 초기 상태를 history에 심기 (뒤로가기 기준점) — 복원할 뷰로 심어야 새로고침 후 뒤로가기가 정상 동작
   history.replaceState({ view: savedView }, '');
 
   setView(savedView);
@@ -5631,7 +5683,7 @@ function showCustDetail(name) {
   const bks = allBks.filter(b=>!b._phonePlaceholder);
   // 전화번호는 모든 예약에서 수집 (placeholder 포함)
   _custDetailName = name;
-  sessionStorage.setItem('gamtan_cust_detail', name);
+  localStorage.setItem('gamtan_cust_detail', name);
   pushNav({ view: 'cust', custName: name });
 
 
@@ -5874,7 +5926,7 @@ function showCustDetail(name) {
             placeholder=""
             oninput="saveVisitNote('${b.id}',this.value)"
             onclick="event.stopPropagation()"
-            style="font-size:12px;border:1px solid #e5e7eb;border-radius:6px;padding:3px 8px;background:#fff;outline:none;width:150px;max-width:200px;color:#374151;font-family:inherit">
+            style="font-size:12px;border:1px solid #e5e7eb;border-radius:6px;padding:3px 8px;background:#fff;outline:none;width:120px;max-width:30vw;min-width:60px;color:#374151;font-family:inherit">
         </div>
         <span id="hist-chev-${b.id}" style="color:#aaa;font-size:13px;flex-shrink:0">▼</span>
       </div>
@@ -5928,8 +5980,8 @@ function showCustDetail(name) {
         ${famHtml}
         <!-- 출고 테이블 (증명사진 제외) -->
         ${b.product!=='id' ? `<div style="margin-top:6px;margin-bottom:2px" id="hist-extra-wrap-${b.id}">
-          <div id="ship-table-${b.id}">
-            <table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb">
+          <div id="ship-table-${b.id}" style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+            <table style="width:100%;min-width:380px;border-collapse:collapse;font-size:12px;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb">
               <thead>
                 <tr style="background:#f3f4f6;border-bottom:1.5px solid #e5e7eb">
                   <th style="padding:5px 8px;text-align:left;font-size:11px;color:#6b7280;font-weight:600;width:22%">항목</th>
@@ -7263,8 +7315,13 @@ function importData(e) {
 window.addEventListener('load', async function() {
   const loaded = await loadFromSheet();
   if (loaded) {
-    // 데이터 새로 불러왔으면 화면 갱신
-    if (typeof renderMonthCal === 'function') renderMonthCal();
+    // 데이터 새로 불러왔으면 현재 뷰에 맞게만 갱신 (무조건 month로 돌리지 않음)
+    if (typeof currentView === 'undefined' || currentView === 'month') {
+      if (typeof renderMonthCal === 'function') renderMonthCal();
+    } else if (currentView === 'list' || currentView === 'date') {
+      if (typeof renderList === 'function') renderList();
+    }
+    // cust 뷰(고객카드)는 별도 갱신 불필요
   }
 });
 </script>
