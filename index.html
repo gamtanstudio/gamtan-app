@@ -5684,6 +5684,7 @@ function showCustDetail(name) {
   // 전화번호는 모든 예약에서 수집 (placeholder 포함)
   _custDetailName = name;
   localStorage.setItem('gamtan_cust_detail', name);
+  localStorage.setItem('gamtan_view', 'cust');
   pushNav({ view: 'cust', custName: name });
 
 
