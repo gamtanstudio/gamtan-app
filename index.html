@@ -5157,28 +5157,43 @@ let lightboxIdx = 0;
 
 // ── Drive 썸네일 연동 ──
 // GAS_URL 을 공유: action='savePhoto' / 'deletePhoto' / 'listPhotos'
-async function driveUploadThumb(custName, thumbDataUrl, filename, localId) {
+async function driveUploadThumb(custName, thumbDataUrl, filename, localId, bookingId) {
   try {
     const res = await fetch(GAS_URL, {
-      method: 'POST', mode: 'no-cors',
+      method: 'POST',
       headers: {'Content-Type': 'text/plain'},
       body: JSON.stringify({
         action: 'savePhoto',
         custName,
         filename,
         localId: String(localId),
+        bookingId: bookingId || '',
         thumbData: thumbDataUrl
       })
     });
-    // no-cors 응답은 opaque → driveId 확인 불가, 무시하고 성공 처리
-  } catch(e) { /* 오프라인 → 로컬만 저장, 나중에 자동 재시도 없음 */ }
+    const json = await res.json();
+    if(json.ok && json.driveId) {
+      if(photoDB) {
+        const tx = photoDB.transaction('photos','readwrite');
+        const store = tx.objectStore('photos');
+        const req = store.get(Number(localId));
+        req.onsuccess = () => {
+          const rec = req.result;
+          if(rec) { rec.driveId = json.driveId; store.put(rec); }
+        };
+      }
+      const arr = photoCache[custName] || [];
+      const p = arr.find(x => x.id === Number(localId));
+      if(p) p.driveId = json.driveId;
+    }
+  } catch(e) { /* 오프라인 → 로컬만 저장 */ }
 }
 
 async function driveDeleteThumb(driveFileId) {
   if (!driveFileId) return;
   try {
     await fetch(GAS_URL, {
-      method: 'POST', mode: 'no-cors',
+      method: 'POST',
       headers: {'Content-Type': 'text/plain'},
       body: JSON.stringify({ action: 'deletePhoto', driveFileId })
     });
@@ -5230,7 +5245,7 @@ function savePhotoToDB(custName, thumb, full, filename, bookingId) {
       if(!photoCache[custName]) photoCache[custName] = [];
       photoCache[custName].push(record);
       // Drive에 썸네일 비동기 업로드 (실패해도 로컬은 유지)
-      driveUploadThumb(custName, thumb, filename, record.id);
+      driveUploadThumb(custName, thumb, filename, record.id, bookingId||'');
       resolve(record);
     };
     req.onerror = () => reject(req.error);
@@ -5316,7 +5331,7 @@ function refreshHistCardPhotos(custName, bid) {
     <div id="hist-photo-${bid}" style="margin-top:8px;padding-top:8px;border-top:1px solid #f5f5f5">
       <div style="font-size:10px;color:#888;margin-bottom:5px">📷 이 방문 사진 (${bPhotos.length}장)</div>
       <div style="display:flex;gap:5px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch">
-        ${bPhotos.map((p,i)=>`<img src="${p.thumb}" style="width:60px;height:60px;object-fit:cover;border-radius:7px;cursor:pointer;flex-shrink:0;border:1.5px solid #e8e8e8" onclick="openLightbox('${safeName}',${(photoCache[name]||[]).indexOf(p)})" title="${p.filename||''}">`).join('')}
+        ${bPhotos.map((p,i)=>`<div style="position:relative;flex-shrink:0"><img src="${p.thumb}" style="width:60px;height:60px;object-fit:cover;border-radius:7px;cursor:pointer;border:1.5px solid #e8e8e8;display:block" onclick="openLightbox('${safeName}',${(photoCache[name]||[]).indexOf(p)})" title="${p.filename||''}"><button onclick="confirmDeletePhoto('${safeName}',${p.id})" style="position:absolute;top:-5px;right:-5px;width:18px;height:18px;background:#ef4444;color:#fff;border:none;border-radius:50%;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1">✕</button></div>`).join('')}
         <label style="width:60px;height:60px;border:2px dashed #ddd;border-radius:7px;cursor:pointer;display:flex;align-items:center;justify-content:center;background:#fff;flex-shrink:0;color:#ccc;font-size:20px">
           ＋<input type="file" accept="image/*" multiple onchange="handlePhotoFiles('${safeName}',this.files,'${bid}');this.value=''" style="display:none">
         </label>
@@ -5336,6 +5351,9 @@ function refreshHistCardPhotos(custName, bid) {
 
 async function confirmDeletePhoto(custName, photoId) {
   if(!confirm('이 사진을 삭제하시겠어요?')) return;
+  // 삭제 전 bookingId 기억
+  const photo = (photoCache[custName]||[]).find(p=>p.id===photoId);
+  const bookingId = photo ? photo.bookingId : null;
   await deletePhotoFromDB(custName, photoId);
   const psEl = document.getElementById('photo-section-wf');
   if(psEl) psEl.outerHTML = buildPhotoSection(custName);
@@ -5344,6 +5362,13 @@ async function confirmDeletePhoto(custName, photoId) {
   if(thumbEl) thumbEl.outerHTML = buildCustThumbs(custName, enc);
   const cpEl = document.getElementById('cust-photo-section-'+enc);
   if(cpEl) cpEl.outerHTML = buildCustPhotoSection(custName);
+  // 히스토리 카드 사진 섹션 갱신
+  if(bookingId) {
+    refreshHistCardPhotos(custName, bookingId);
+  } else {
+    const allBks = bookings.filter(b=>b.name===custName);
+    allBks.forEach(b => refreshHistCardPhotos(custName, b.id));
+  }
 }
 
 function buildCustPhotoSection(custName) {
@@ -5934,7 +5959,7 @@ function showCustDetail(name) {
       <div id="hist-photo-${b.id}" style="margin-top:8px;padding-top:8px;border-top:1px solid #f5f5f5">
         <div style="font-size:10px;color:#888;margin-bottom:5px">📷 이 방문 사진 (${bPhotos.length}장)</div>
         <div style="display:flex;gap:5px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch">
-          ${bPhotos.map((p,i)=>`<img src="${p.thumb}" style="width:60px;height:60px;object-fit:cover;border-radius:7px;cursor:pointer;flex-shrink:0;border:1.5px solid #e8e8e8" onclick="openLightbox('${safeName}',${(photoCache[name]||[]).indexOf(p)})" title="${p.filename||''}">`).join('')}
+          ${bPhotos.map((p,i)=>`<div style="position:relative;flex-shrink:0"><img src="${p.thumb}" style="width:60px;height:60px;object-fit:cover;border-radius:7px;cursor:pointer;border:1.5px solid #e8e8e8;display:block" onclick="openLightbox('${safeName}',${(photoCache[name]||[]).indexOf(p)})" title="${p.filename||''}"><button onclick="confirmDeletePhoto('${safeName}',${p.id})" style="position:absolute;top:-5px;right:-5px;width:18px;height:18px;background:#ef4444;color:#fff;border:none;border-radius:50%;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1">✕</button></div>`).join('')}
           <label style="width:60px;height:60px;border:2px dashed #ddd;border-radius:7px;cursor:pointer;display:flex;align-items:center;justify-content:center;background:#fff;flex-shrink:0;color:#ccc;font-size:20px">
             ＋<input type="file" accept="image/*" multiple onchange="handlePhotoFiles('${safeName}',this.files,'${b.id}');this.value=''" style="display:none">
           </label>
