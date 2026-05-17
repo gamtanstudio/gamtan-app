@@ -6275,10 +6275,10 @@ function showCustDetail(name) {
       <div style="background:#fffde7;border:1.5px solid #fde68a;border-radius:10px;padding:10px 12px;margin-bottom:4px">
         <div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:6px">📝 상담 메모 <span style="font-size:10px;font-weight:400;color:#b45309">(성격·특이사항·선호 등 누적 기록)</span></div>
         <textarea id="cust-memo-ta-main"
-          rows="5"
           placeholder="상담 메모"
-          style="width:100%;box-sizing:border-box;border:none;background:transparent;font-size:13px;color:#333;resize:vertical;outline:none;font-family:inherit;line-height:1.7;min-height:90px"
-          oninput="custMemos['${safeName}']=this.value;saveCustMemos()"
+          style="width:100%;box-sizing:border-box;border:none;background:transparent;font-size:13px;color:#333;resize:none;outline:none;font-family:inherit;line-height:1.7;overflow:hidden;min-height:40px"
+          oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px';custMemos['${safeName}']=this.value;saveCustMemos()"
+          onload="this.style.height=this.scrollHeight+'px'"
         >${escHtml(custMemo)}</textarea>
       </div>
       <!-- ⑤ 활동 로그 -->
@@ -6316,6 +6316,11 @@ function showCustDetail(name) {
   `;
   // 새로고침 후 펼침 상태 복원
   setTimeout(restoreOpenHistCards, 0);
+  // 상담 메모 textarea 높이 자동 조절
+  setTimeout(() => {
+    const ta = document.getElementById('cust-memo-ta-main');
+    if(ta) { ta.style.height='auto'; ta.style.height=ta.scrollHeight+'px'; }
+  }, 0);
 }
 
 // 히스토리 카드 접기/펼치기
