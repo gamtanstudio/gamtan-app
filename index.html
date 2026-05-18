@@ -293,9 +293,11 @@ body{font-family:'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif
   /* 폼 */
   .modal{padding:16px}
   /* 월간 캘린더 */
-  .mc-nav{padding:10px 12px;gap:6px}
-  .mc-title{font-size:16px;min-width:100px}
-  .mc-grid-wrap{padding:4px}
+  .mc-nav{padding:8px 10px;gap:4px;flex-wrap:nowrap}
+  .mc-title{font-size:14px;min-width:80px;text-align:center}
+  .mc-nav-btn{width:28px;height:28px;font-size:16px}
+  .mc-today-btn{padding:4px 8px;font-size:11px}
+  .mc-grid-wrap{padding:3px}
   .mc-grid{gap:2px}
   .mc-cell{min-height:64px;padding:2px 3px}
   .mc-dnum{font-size:11px}
@@ -305,7 +307,7 @@ body{font-family:'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif
   .mc-entry-name{font-size:9px}
   .mc-entry-prod{display:none}
   .mc-add-btn{display:none}
-  .mc-memo-ta{display:none}  /* 모바일에서 메모 영역 숨김 — 공간 확보 */
+  .mc-memo-ta{font-size:11px;min-height:28px}
   /* 사진 섹션 */
   .photo-thumb{width:72px;height:72px}
   .photo-add-cell{width:72px;height:72px}
@@ -458,7 +460,7 @@ body{font-family:'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif
 </div>
 
 <script>
-const APP_PASSWORD = '36393639';
+const APP_PASSWORD = 'gamtan3639';
 function checkPassword() {
   const val = document.getElementById('lock-input').value;
   if (val === APP_PASSWORD) {
@@ -4968,8 +4970,10 @@ function renderMonthCal() {
     const bks = (byDate[cell.ds]||[]).sort((a,b)=>a.time.localeCompare(b.time));
     const memo = dateMemos[cell.ds] || '';
 
-    // 인라인 메모 textarea (항상 표시)
-    const memoHtml = cell.thisMonth
+    // 인라인 메모 textarea — 모바일(600px 이하)에서는 메모 내용 있을 때만 렌더링
+    const isMob = window.innerWidth <= 600;
+    const showMemo = cell.thisMonth && (!isMob || memo.trim());
+    const memoHtml = showMemo
       ? `<textarea class="mc-memo-ta${memo?' has-memo':''}" rows="2"
           placeholder="메모..."
           onchange="mcSaveMemo('${cell.ds}',this.value)"
@@ -5060,8 +5064,7 @@ function renderMonthCal() {
     }).join('');
 
     // 모바일: 셀당 최대 3개 표시, 초과분은 +N건 배지
-    const isMobileView = window.innerWidth <= 600;
-    const MAX_ENTRIES = isMobileView ? 3 : 99;
+    const MAX_ENTRIES = isMob ? 3 : 99;
     let finalEntriesHtml = entriesHtml;
     if(bks.length > MAX_ENTRIES) {
       // 앞 MAX_ENTRIES개의 HTML만 잘라내기
@@ -5083,7 +5086,7 @@ function renderMonthCal() {
     return `<div class="${cls}" data-ds="${cell.ds}">
       <div class="mc-dnum">
         ${isToday ? `<span class="mc-today-dot">${cell.day}</span>` : cell.day}
-        ${bks.length > 0 && isMobileView ? `<span class="mc-count-badge">${bks.length}</span>` : ''}
+        ${bks.length > 0 && isMob ? `<span class="mc-count-badge">${bks.length}</span>` : ''}
       </div>
       ${memoHtml}
       ${finalEntriesHtml}
@@ -5098,8 +5101,8 @@ function renderMonthCal() {
       <button class="mc-nav-btn" onclick="mcNextMonth()">›</button>
       <button class="mc-today-btn" onclick="mcGoToday()">오늘</button>
       <div style="flex:1"></div>
-      <button onclick="openCustSearchPopup()" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer;font-weight:600">👤 고객 검색</button>
-      <button onclick="openAddModal()" style="background:#6366f1;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer;font-weight:700">＋ 예약 추가</button>
+      <button onclick="openCustSearchPopup()" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-weight:600;white-space:nowrap">👤 검색</button>
+      <button onclick="openAddModal()" style="background:#6366f1;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-weight:700;white-space:nowrap">＋ 추가</button>
     </div>
     <div class="mc-grid-wrap">
       <div class="mc-grid">
