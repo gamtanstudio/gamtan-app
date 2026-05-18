@@ -501,7 +501,7 @@ if (sessionStorage.getItem('gamtan_auth') === '1') {
   <div id="right">
     <!-- 모바일 뒤로가기 버튼 -->
     <div id="mobile-back-bar">
-      <button onclick="mobileGoBack()">← 목록</button>
+      <button onclick="mobileGoBack()">← 캘린더</button>
       <span id="mobile-back-name"></span>
     </div>
     <div id="empty-state">
@@ -3950,10 +3950,13 @@ function selectBooking(id) {
 }
 
 function mobileGoBack() {
-  document.getElementById('right').classList.remove('mobile-show');
+  // 우측 패널 닫기
+  const right = document.getElementById('right');
+  right.classList.remove('mobile-show');
   selectedId = null;
   localStorage.removeItem('gamtan_selected_id');
-  renderList();
+  // 월간 캘린더로 복귀
+  setView('month');
 }
 
 function clearWorkflow() {
@@ -5810,6 +5813,7 @@ function showCustDetail(name) {
   // 우측 패널 열기
   const right = document.getElementById('right');
   if(right) {
+    right.style.display = '';  // month 뷰에서 숨겨진 경우 복원
     right.scrollTop = 0;
     if(window.innerWidth <= 768) {
       right.classList.add('mobile-show');
