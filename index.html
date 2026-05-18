@@ -305,7 +305,7 @@ body{font-family:'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif
   .mc-entry-name{font-size:9px}
   .mc-entry-prod{display:none}
   .mc-add-btn{display:none}
-  .mc-memo-ta{font-size:11px;min-height:32px}
+  .mc-memo-ta{display:none}  /* 모바일에서 메모 영역 숨김 — 공간 확보 */
   /* 사진 섹션 */
   .photo-thumb{width:72px;height:72px}
   .photo-add-cell{width:72px;height:72px}
@@ -397,6 +397,11 @@ body{font-family:'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif
 .mc-entry-visit{font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-left:35px;display:block;margin-top:-1px;opacity:.8}
 .mc-add-btn{margin-top:auto;background:none;border:1px dashed #e0e0e0;border-radius:3px;font-size:10px;color:#ccc;cursor:pointer;padding:2px;width:100%;transition:all .15s;flex-shrink:0}
 .mc-add-btn:hover{border-color:#6366f1;color:#6366f1;background:#f5f3ff}
+/* 모바일 더보기 배지 */
+.mc-more-badge{font-size:9px;background:#6366f1;color:#fff;border-radius:3px;padding:1px 4px;text-align:center;cursor:pointer;margin-top:1px;flex-shrink:0;font-weight:700;opacity:.85;transition:opacity .15s}
+.mc-more-badge:hover{opacity:1}
+/* 예약 건수 배지 (날짜 옆) */
+.mc-count-badge{font-size:9px;background:#e0e7ff;color:#4f46e5;border-radius:8px;padding:0 4px;font-weight:700;line-height:16px;flex-shrink:0}
 @keyframes histFlash{0%{box-shadow:0 0 0 0 rgba(99,102,241,0.9)}40%{box-shadow:0 0 0 10px rgba(99,102,241,0.3)}70%{box-shadow:0 0 0 14px rgba(99,102,241,0.1)}100%{box-shadow:0 0 0 0 rgba(99,102,241,0)}}
 .hist-flash{animation:histFlash .7s ease-out 3;border-color:#6366f1 !important}
 /* ===== 사진 관리 ===== */
@@ -453,7 +458,7 @@ body{font-family:'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif
 </div>
 
 <script>
-const APP_PASSWORD = 'gamtan3639';
+const APP_PASSWORD = '36393639';
 function checkPassword() {
   const val = document.getElementById('lock-input').value;
   if (val === APP_PASSWORD) {
@@ -875,13 +880,20 @@ function fmtTime(t) {
   const timeText = m===0 ? `${hh}시` : `${hh}시 ${m}분`;
   return `<span style="color:${color};font-weight:700">${timeText}</span>`;
 }
+// HTML 태그 없는 순수 텍스트용 시간 포맷 (메시지 발송용)
+function fmtTimePlain(t) {
+  if(!t) return '';
+  const [h,m] = t.split(':').map(Number);
+  const hh = h===0?12:h>12?h-12:h;
+  return m===0 ? `${hh}시` : `${hh}시 ${m}분`;
+}
 function addMinutes(t, mins) {
   if(!t) return '';
   const [h,m] = t.split(':').map(Number);
   const total = h*60+m+mins;
   const nh = Math.floor(total/60)%24;
   const nm = total%60;
-  return fmtTime(`${String(nh).padStart(2,'0')}:${String(nm).padStart(2,'0')}`);
+  return fmtTimePlain(`${String(nh).padStart(2,'0')}:${String(nm).padStart(2,'0')}`);
 }
 function totalCount(b) {
   const a = parseInt(b.adults)||0;
@@ -966,7 +978,7 @@ function getMsg3(b) {
   const p = PRODUCTS[b.product];
   if(p.noMsg) return '(증명사진은 네이버 플레이스에서 자동으로 처리됩니다.)';
   const dateKo = fmtDateKo(b.date);
-  const timeStr = fmtTime(b.time);
+  const timeStr = fmtTimePlain(b.time);
   const hasKids = b.hasKids || p.requiresKids || p.kidsOnly;
   const tot = totalStr(b);
   const adlt = adultStr(b);
@@ -1368,7 +1380,7 @@ function histSetIdWebFile(bid, checked, custName) {
 function getChecklistItems(b, stageIdx) {
   const p = PRODUCTS[b.product];
   const dateKo = fmtDateKo(b.date);
-  const timeStr = fmtTime(b.time);
+  const timeStr = fmtTimePlain(b.time);
   const endTime = addMinutes(b.time, p.duration);
   const isId = b.product==='id';
 
@@ -4054,7 +4066,7 @@ function renderWorkflow(b) {
 function buildIdStageBody(b, stageIdx, isDone, isCurrent) {
   const p = PRODUCTS[b.product];
   const dateKo = fmtDateKo(b.date);
-  const timeStr = fmtTime(b.time);
+  const timeStr = fmtTimePlain(b.time);
   const endTime = addMinutes(b.time, p.duration);
   const clItems = stageIdx===0
     ? [{title:'SM메이트에 예약 등록', detail:`고객명: ${b.name} | 상품: 증명사진 | 날짜: ${dateKo} | 시간: ${timeStr} ~ ${endTime}`},
@@ -5047,6 +5059,19 @@ function renderMonthCal() {
 
     }).join('');
 
+    // 모바일: 셀당 최대 3개 표시, 초과분은 +N건 배지
+    const isMobileView = window.innerWidth <= 600;
+    const MAX_ENTRIES = isMobileView ? 3 : 99;
+    let finalEntriesHtml = entriesHtml;
+    if(bks.length > MAX_ENTRIES) {
+      // 앞 MAX_ENTRIES개의 HTML만 잘라내기
+      const allEntryDivs = entriesHtml.match(/<div class="mc-entry"[\s\S]*?<\/div>\s*<\/div>/g) || [];
+      const visibleHtml = allEntryDivs.slice(0, MAX_ENTRIES).join('');
+      const moreCount = bks.length - MAX_ENTRIES;
+      const moreHtml = `<div class="mc-more-badge" onclick="mcJumpToDate('${cell.ds}')">+${moreCount}건 더보기</div>`;
+      finalEntriesHtml = visibleHtml + moreHtml;
+    }
+
     const cls = [
       'mc-cell',
       isToday ? 'mc-today' : '',
@@ -5058,9 +5083,10 @@ function renderMonthCal() {
     return `<div class="${cls}" data-ds="${cell.ds}">
       <div class="mc-dnum">
         ${isToday ? `<span class="mc-today-dot">${cell.day}</span>` : cell.day}
+        ${bks.length > 0 && isMobileView ? `<span class="mc-count-badge">${bks.length}</span>` : ''}
       </div>
       ${memoHtml}
-      ${entriesHtml}
+      ${finalEntriesHtml}
       ${cell.thisMonth ? `<button class="mc-add-btn" onclick="openAddModalForDate('${cell.ds}')">＋ 예약 추가</button>` : ''}
     </div>`;
   }).join('');
@@ -5102,6 +5128,20 @@ function mcNextMonth() {
 function mcGoToday() {
   const t = new Date(); mcYear = t.getFullYear(); mcMonth = t.getMonth();
   renderMonthCal();
+}
+
+// +N건 더보기 클릭 → 해당 날짜 일별 뷰로 이동 (캘린더 뷰의 날짜 클릭 활용)
+function mcJumpToDate(ds) {
+  // 날짜별 보기(cal 뷰)로 전환 후 해당 날짜 선택
+  setView('cal');
+  setTimeout(()=>{
+    // 해당 날짜로 캘린더 이동
+    const [y,m,d] = ds.split('-').map(Number);
+    calYear = y; calMonth = m-1;
+    selectedDate = ds;
+    renderCalendar();
+    renderBookingList();
+  }, 50);
 }
 
 // 월간에서 예약 클릭 → 고객카드(고객별 보기)로 이동
@@ -6331,7 +6371,7 @@ function cancelBooking(bid, custName) {
   b.cancelled = true;
   b.cancelledAt = new Date().toISOString().slice(0,10);
   saveBookings();
-  addCustLog(custName, `예약 취소 — ${fmtDateKo(b.date)} ${fmtTime(b.time)} ${(PRODUCTS[b.product]||PRODUCTS.story).name}`);
+  addCustLog(custName, `예약 취소 — ${fmtDateKo(b.date)} ${fmtTimePlain(b.time)} ${(PRODUCTS[b.product]||PRODUCTS.story).name}`);
   showCustDetail(custName);
 }
 function uncancelBooking(bid, custName) {
@@ -6340,7 +6380,7 @@ function uncancelBooking(bid, custName) {
   b.cancelled = false;
   b.cancelledAt = '';
   saveBookings();
-  addCustLog(custName, `예약 취소 해제 — ${fmtDateKo(b.date)} ${fmtTime(b.time)}`);
+  addCustLog(custName, `예약 취소 해제 — ${fmtDateKo(b.date)} ${fmtTimePlain(b.time)}`);
   showCustDetail(custName);
 }
 
