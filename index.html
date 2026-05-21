@@ -1670,23 +1670,20 @@ async function syncToSheet() {
 async function loadFromSheet() {
   return new Promise((resolve) => {
     showSyncStatus('🔄 불러오는 중...');
-    const cbName = '_gasCallback_' + Date.now();
-    const script = document.createElement('script');
 
     const timeout = setTimeout(() => {
-      delete window[cbName];
-      try { document.body.removeChild(script); } catch(e) {}
+      window.removeEventListener('message', handler);
       showSyncStatus('⚠️ 오프라인 모드');
       resolve(false);
-    }, 15000);
+    }, 20000);
 
-    window[cbName] = function(json) {
+    function handler(event) {
+      if (!event.data || event.data.type !== 'GAS_LOAD_RESULT') return;
       clearTimeout(timeout);
-      delete window[cbName];
-      try { document.body.removeChild(script); } catch(e) {}
+      window.removeEventListener('message', handler);
+      const json = event.data.payload;
       if (json && json.ok && json.payload) {
-        const d = typeof json.payload === 'string'
-          ? JSON.parse(json.payload) : json.payload;
+        const d = typeof json.payload === 'string' ? JSON.parse(json.payload) : json.payload;
         applyAllData(d);
         showSyncStatus('✅ 최신 데이터');
         resolve(true);
@@ -1694,18 +1691,18 @@ async function loadFromSheet() {
         showSyncStatus('✅ 연결됨');
         resolve(false);
       }
-    };
+    }
 
-    script.onerror = function() {
-      clearTimeout(timeout);
-      delete window[cbName];
-      try { document.body.removeChild(script); } catch(e) {}
-      showSyncStatus('⚠️ 오프라인 모드');
-      resolve(false);
-    };
+    window.addEventListener('message', handler);
 
-    script.src = GAS_URL + '?action=load&callback=' + cbName;
-    document.body.appendChild(script);
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = GAS_URL + '?action=loadFrame&origin=' + encodeURIComponent(location.origin);
+    document.body.appendChild(iframe);
+
+    setTimeout(() => {
+      try { document.body.removeChild(iframe); } catch(e) {}
+    }, 25000);
   });
 }
 
