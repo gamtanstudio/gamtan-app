@@ -7423,11 +7423,24 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
 
   const masterRows = custRows || schedRows;
   const mh = masterRows[0];
-  const mc = {
+  // 고객정보 파일은 헤더가 1칸 밀려있어 indexOf 대신 실제 데이터 위치로 직접 매핑
+  const isCustFile = mh.includes('고유번호') && mh.includes('엄마아빠');
+  const mc = isCustFile ? {
+    rowno:    0,   // 고유번호 컬럼 → 실제 고객명
+    name:     0,   // 실제 고객명
+    custno:   4,   // 고객번호
+    phone:    2,   // 엄마아빠 컬럼 → 실제 전화번호
+    phone2:   -1,
+    product:  5,   // 계약번호 컬럼 → 실제 상품명
+    contract: 6,   // 상품명 컬럼 → 실제 계약일
+    total:    9,   // 총액
+    deposit:  10,  // 선금
+    memo:     -1,
+  } : {
     rowno:    mh.indexOf('고유번호') !== -1 ? mh.indexOf('고유번호') : mh.indexOf('No'),
     name:     mh.indexOf('고객명') !== -1 ? mh.indexOf('고객명') : (mh.indexOf('아기') !== -1 ? mh.indexOf('아기') : -1),
     custno:   mh.indexOf('고객번호'),
-    phone:    mh.indexOf('엄마아빠') !== -1 ? mh.indexOf('엄마아빠') : mh.indexOf('엄마폰') !== -1 ? mh.indexOf('엄마폰') : mh.indexOf('휴대폰'),
+    phone:    mh.indexOf('엄마폰') !== -1 ? mh.indexOf('엄마폰') : mh.indexOf('휴대폰'),
     phone2:   mh.indexOf('아빠폰'),
     product:  mh.indexOf('상품명') !== -1 ? mh.indexOf('상품명') : mh.indexOf('상품'),
     contract: mh.indexOf('계약일'),
