@@ -1668,22 +1668,45 @@ async function syncToSheet() {
 }
 
 async function loadFromSheet() {
-  try {
+  return new Promise((resolve) => {
     showSyncStatus('🔄 불러오는 중...');
-    const res = await fetch(GAS_URL + '?action=load', {redirect: 'follow'});
-    const json = await res.json();
-    if (json.ok && json.payload) {
-      // 새 구조: payload가 객체로 바로 옴 (JSON.parse 불필요)
-      const d = typeof json.payload === 'string' ? JSON.parse(json.payload) : json.payload;
-      applyAllData(d);
-      showSyncStatus('✅ 최신 데이터');
-      return true;
-    }
-    showSyncStatus('✅ 연결됨');
-  } catch(e) {
-    showSyncStatus('⚠️ 오프라인 모드');
-  }
-  return false;
+    const cbName = '_gasCallback_' + Date.now();
+    const script = document.createElement('script');
+
+    const timeout = setTimeout(() => {
+      delete window[cbName];
+      try { document.body.removeChild(script); } catch(e) {}
+      showSyncStatus('⚠️ 오프라인 모드');
+      resolve(false);
+    }, 15000);
+
+    window[cbName] = function(json) {
+      clearTimeout(timeout);
+      delete window[cbName];
+      try { document.body.removeChild(script); } catch(e) {}
+      if (json && json.ok && json.payload) {
+        const d = typeof json.payload === 'string'
+          ? JSON.parse(json.payload) : json.payload;
+        applyAllData(d);
+        showSyncStatus('✅ 최신 데이터');
+        resolve(true);
+      } else {
+        showSyncStatus('✅ 연결됨');
+        resolve(false);
+      }
+    };
+
+    script.onerror = function() {
+      clearTimeout(timeout);
+      delete window[cbName];
+      try { document.body.removeChild(script); } catch(e) {}
+      showSyncStatus('⚠️ 오프라인 모드');
+      resolve(false);
+    };
+
+    script.src = GAS_URL + '?action=load&callback=' + cbName;
+    document.body.appendChild(script);
+  });
 }
 
 function showSyncStatus(msg) {
