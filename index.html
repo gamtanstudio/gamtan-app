@@ -7241,10 +7241,11 @@ function smProductKey(smName) {
 
 function parseSmXls(raw) {
   const txt = new TextDecoder('euc-kr').decode(raw);
-  const lines = txt.split(/\r?\n/).map(line => line.split('\t').map(c => c.trim()));
+  const lines = txt.split(/\r?\n/).map(line =>
+    line.split('\t').map(c => c.replace(/^[\s\u00a0\ufeff]+|[\s\u00a0\ufeff]+$/g, ''))
+  );
   if (lines.length < 2) return lines;
   const colCount = lines[0].length;
-  // 헤더 포함, 컬럼 수가 헤더±1 범위 벗어나는 행은 건너뜀
   return lines.filter((row, i) => i === 0 || (row.length >= colCount - 1 && row.length <= colCount + 1));
 }
 
