@@ -1631,7 +1631,7 @@ function getCustNo(name) {
 }
 
 // ===== 구글 시트 연동 =====
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbw2TryJPB3KT_HhFgYieJieFy2j1FwAaSZ5wKcFW9wePgCHBiwJdZ7onp3PIbJrg4Ka_g/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzWUFLlexDFy4ciFEdpfM0QYyABwynEGAT0yRipM6TwRqA8MUnaZ0k_lqTu75sYJSa6FQ/exec';
 let syncTimer = null;
 
 function getAllData() {
@@ -1673,7 +1673,8 @@ async function loadFromSheet() {
     const res = await fetch(GAS_URL + '?action=load');
     const json = await res.json();
     if (json.ok && json.payload) {
-      const d = JSON.parse(json.payload);
+      // 새 구조: payload가 객체로 바로 옴 (JSON.parse 불필요)
+      const d = typeof json.payload === 'string' ? JSON.parse(json.payload) : json.payload;
       applyAllData(d);
       showSyncStatus('✅ 최신 데이터');
       return true;
@@ -7517,10 +7518,9 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
           adults: 2, kids: 0,
           memo: '[SM ' + c.type + '] ' + (c.title||smProduct)
             + (totalAmt > 0 && idx===0 ? ' / 총액: ' + totalAmt.toLocaleString('ko-KR') + '원' : '')
-            + (productSummary ? '\n' + productSummary : '')
-            + (c.memo ? ' / ' + c.memo : ''),
+            + (c.memo ? ' / ' + c.memo.slice(0,100) : ''),
           stage: c.state === '완료' ? 7 : 1,
-          stageChecks: {}, priceItems: [],
+
           payments: { deposit: { amt: idx===0 ? depositAmt : 0, method: '계좌이체' }, midterms: [] },
           smImport: true,
         });
@@ -7536,8 +7536,7 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
           adults: 2, kids: 0,
           memo: '[SM메이트 계약] ' + smProduct
             + (totalAmt > 0 ? ' / 총액: ' + totalAmt.toLocaleString('ko-KR') + '원' : '')
-            + (productSummary ? '\n' + productSummary : '')
-            + (memoTxt ? ' / ' + memoTxt : ''),
+            + (memoTxt ? ' / ' + memoTxt.slice(0,100) : ''),
           stage: 1, stageChecks: {}, priceItems: [],
           payments: { deposit: { amt: depositAmt, method: '계좌이체' }, midterms: [] },
           smImport: true,
