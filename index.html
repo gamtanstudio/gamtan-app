@@ -7442,10 +7442,8 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
     if (!cleanName) return;
 
     const smCustNo  = String(r[mc.custno]||'').trim();  // SM메이트 원본 고객번호
-    const rawPhone  = (r[mc.phone]||'').toString().trim();
-    // 엄마아빠 컬럼값이 전화번호 형식이면 사용, 아니면 phone2(아빠폰) 시도
-    const phone     = /^0\d{1,2}-?\d{3,4}-?\d{4}$/.test(rawPhone.replace(/\s/g,'')) ? rawPhone
-                    : (r[mc.phone2]||'').toString().trim();
+    // 엄마아빠 컬럼 또는 엄마폰/휴대폰에서 전화번호 추출
+    const phone     = (r[mc.phone]||r[mc.phone2]||'').toString().trim();
     const smProduct = (r[mc.product]||'').toString().trim();
     const contractDate = (r[mc.contract]||'').toString().trim().replace(/\//g,'-').slice(0,10);
     const totalAmt  = parseInt(r[mc.total])||0;
