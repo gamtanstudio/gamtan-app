@@ -7551,7 +7551,12 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
   saveBookings();
   saveCustomers();
   renderAll();
-  alert(`SM메이트 가져오기 완료!\n고객 ${addedCust}명 추가\n히스토리 ${addedBooking}건 추가\n중복 건너뜀 ${skipped}건\n\n※ SM메이트 원본 고객번호가 그대로 유지됩니다.`);
+  // alert 대신 상태바에 표시 (alert는 Edge에서 페이지 리셋 유발)
+  showSyncStatus(`✅ SM완료: 고객 ${addedCust}명, 히스토리 ${addedBooking}건`);
+  const msg = document.createElement('div');
+  msg.style.cssText = 'position:fixed;top:60px;left:50%;transform:translateX(-50%);background:#1a1a2e;color:#fff;padding:16px 24px;border-radius:12px;z-index:9999;font-size:14px;line-height:1.8;box-shadow:0 4px 20px rgba(0,0,0,.3)';
+  msg.innerHTML = `<b>SM메이트 가져오기 완료!</b><br>고객 ${addedCust}명 추가<br>히스토리 ${addedBooking}건 추가<br>중복 건너뜀 ${skipped}건<br><small style="opacity:.7">※ 구글 시트에 저장 중...</small><br><br><button onclick="this.parentNode.remove()" style="background:#6366f1;color:#fff;border:none;border-radius:6px;padding:6px 20px;cursor:pointer;font-size:13px">확인</button>`;
+  document.body.appendChild(msg);
 }
 
 function importData(e) {
