@@ -7241,7 +7241,11 @@ function smProductKey(smName) {
 
 function parseSmXls(raw) {
   const txt = new TextDecoder('euc-kr').decode(raw);
-  return txt.split(/\r?\n/).map(line => line.split('\t').map(c => c.trim()));
+  const lines = txt.split(/\r?\n/).map(line => line.split('\t').map(c => c.trim()));
+  if (lines.length < 2) return lines;
+  const colCount = lines[0].length;
+  // 헤더 포함, 컬럼 수가 헤더±1 범위 벗어나는 행은 건너뜀
+  return lines.filter((row, i) => i === 0 || (row.length >= colCount - 1 && row.length <= colCount + 1));
 }
 
 function importSmMate(e) {
@@ -7264,17 +7268,17 @@ function importSmMate(e) {
       const rows = parseSmXls(raw);
       const header = rows[0] || [];
 
-      // 헤더로 파일 종류 구분
-      if (header.includes('고객번호') && header.includes('총액') && header.includes('계약일')) {
-        custRows = rows;           // 고객정보
-      } else if (header.includes('No') && (header.includes('아기') || header.includes('엄마폰'))) {
-        schedRows = rows;          // 스케줄
-      } else if (header.includes('스케줄구분') && header.includes('일자')) {
-        contractRows = rows;       // 계약정보
+      // 헤더로 파일 종류 구분 (순서 중요: 더 구체적인 조건 먼저)
+      if (header.includes('스케줄구분') && header.includes('일자') && header.includes('시각')) {
+        contractRows = rows;       // 계약정보 (스케줄구분 컬럼이 핵심)
+      } else if (header.includes('No') && header.includes('아기') && header.includes('엄마폰')) {
+        schedRows = rows;          // 스케줄 (아기+엄마폰 조합)
       } else if (header.includes('고객No') && header.includes('방문동기')) {
         histRows = rows;           // 이력
       } else if (header.includes('세부상품명') && header.includes('출고')) {
         productRows = rows;        // 세부상품
+      } else if (header.includes('고객명') && header.includes('고객번호') && header.includes('총액')) {
+        custRows = rows;           // 고객정보 (가장 마지막에 체크)
       }
 
       loaded++;
