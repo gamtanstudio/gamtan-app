@@ -1501,7 +1501,7 @@ function reserveBlock(b) {
   return `+ NOSHOW\n노쇼 방지를 위해 촬영 전 예약금을 받고 있는 점 양해 바랍니다.\n\n+ 예약금 ${dep} 입금\n  [ 635-057095-01-019  기업은행 / 김시현(감탄사진관) ]\n\n+ 예약자명과 입금자명은 동일하게 부탁드립니다.\n+ 1시간 이내 예약금 미입금 시 예약은 자동 취소됩니다.\n\n*예약변경 & 환불규정*\n- 예약변경은 촬영일 10일 전까지 1회 가능\n- 예약취소는 예약 확정 후 3일까지 전액환불, 이후 예약금 환불 불가\n\n*기타 문의는 카카오채널로 부탁드립니다.\nhttp://pf.kakao.com/_xiNxoGs`;
 }
 // ====================== STORAGE ======================
-let bookings = JSON.parse(localStorage.getItem('gamtan_bookings')||'[]');
+let bookings = [];
 // 이전 체크리스트 툴과 호환: prodKey → product 필드 정규화
 bookings = bookings.map(b => {
   if(!b.product && b.prodKey) b.product = b.prodKey;
@@ -1522,11 +1522,11 @@ const _savedCal = JSON.parse(sessionStorage.getItem('gamtan_cal_pos')||'null');
 let calYear  = _savedCal ? _savedCal.y : _today.getFullYear();
 let calMonth = _savedCal ? _savedCal.m : _today.getMonth(); // 0-indexed
 let selectedCalDate = _savedCal ? _savedCal.d : _today.toISOString().slice(0,10);
-let customers = JSON.parse(localStorage.getItem('gamtan_customers')||'[]');
-let dateMemos = JSON.parse(localStorage.getItem('gamtan_date_memos')||'{}');
-let custMemos = JSON.parse(localStorage.getItem('gamtan_cust_memos')||'{}');
+let customers = [];
+let dateMemos = {};
+let custMemos = {};
 let custProfiles = JSON.parse(localStorage.getItem('gamtan_cust_profiles')||'{}');
-let custLogs = JSON.parse(localStorage.getItem('gamtan_cust_logs')||'{}');
+let custLogs = {};
 // 고객 상세 정보 (방문동기, 생일, 기념일 등)
 let custExtra = JSON.parse(localStorage.getItem('gamtan_cust_extra')||'{}');
 function saveCustExtra() { localStorage.setItem('gamtan_cust_extra', JSON.stringify(custExtra)); }
@@ -1587,7 +1587,7 @@ function selectReferrer(safeName, val) {
   const input = document.getElementById('cx-referrer-'+safeName);
   if(input) input.value = val;
 }
-function saveCustLogs() { localStorage.setItem('gamtan_cust_logs', JSON.stringify(custLogs)); }
+function saveCustLogs() { scheduleSyncToSheet(); }
 function addCustLog(name, text) {
   if(!custLogs[name]) custLogs[name] = [];
   const now = new Date();
@@ -1697,10 +1697,10 @@ function scheduleSyncToSheet() {
 }
 // ===== 구글 시트 연동 끝 =====
 
-function saveBookings() { localStorage.setItem('gamtan_bookings', JSON.stringify(bookings)); scheduleSyncToSheet(); }
-function saveCustomers() { localStorage.setItem('gamtan_customers', JSON.stringify(customers)); scheduleSyncToSheet(); }
+function saveBookings() { scheduleSyncToSheet(); }
+function saveCustomers() { scheduleSyncToSheet(); }
 function saveDateMemos() { localStorage.setItem('gamtan_date_memos', JSON.stringify(dateMemos)); }
-function saveCustMemos() { localStorage.setItem('gamtan_cust_memos', JSON.stringify(custMemos)); }
+function saveCustMemos() { scheduleSyncToSheet(); }
 function saveCustProfiles() { localStorage.setItem('gamtan_cust_profiles', JSON.stringify(custProfiles)); }
 function setCustProfile(name, field, val) {
   if(!custProfiles[name]) custProfiles[name] = {};
