@@ -1670,7 +1670,7 @@ async function syncToSheet() {
 async function loadFromSheet() {
   try {
     showSyncStatus('🔄 불러오는 중...');
-    const res = await fetch(GAS_URL + '?action=load');
+    const res = await fetch(GAS_URL + '?action=load', {redirect: 'follow'});
     const json = await res.json();
     if (json.ok && json.payload) {
       // 새 구조: payload가 객체로 바로 옴 (JSON.parse 불필요)
