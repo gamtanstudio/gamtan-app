@@ -7248,11 +7248,14 @@ function importSmMate(e) {
   const files = Array.from(e.target.files);
   if (!files.length) return;
 
-  let custRows = null;   // themel20466 계열 - 고객 마스터
-  let schedRows = null;  // themel60884 계열 - 스케줄
+  // 5개 파일 분류
+  let custRows    = null;  // 고객정보 (고객명, 고객번호, 휴대폰, 총액, 계약일)
+  let schedRows   = null;  // 스케줄 (No, 아기/고객명, 엄마폰, 상품, 계약일)
+  let contractRows= null;  // 계약정보 (스케줄구분, 일자, 시각, 고객명, 휴대폰, 고객번호)
+  let histRows    = null;  // 이력 (고객No, 고객명, 메모)
+  let productRows = null;  // 세부상품 (고객번호, 세부상품명, 출고)
 
   let loaded = 0;
-  const readers = [];
 
   files.forEach(file => {
     const reader = new FileReader();
@@ -7261,15 +7264,22 @@ function importSmMate(e) {
       const rows = parseSmXls(raw);
       const header = rows[0] || [];
 
-      if (header.includes('총액') && header.includes('계약일')) {
-        custRows = rows;
+      // 헤더로 파일 종류 구분
+      if (header.includes('고객번호') && header.includes('총액') && header.includes('계약일')) {
+        custRows = rows;           // 고객정보
+      } else if (header.includes('No') && (header.includes('아기') || header.includes('엄마폰'))) {
+        schedRows = rows;          // 스케줄
       } else if (header.includes('스케줄구분') && header.includes('일자')) {
-        schedRows = rows;
+        contractRows = rows;       // 계약정보
+      } else if (header.includes('고객No') && header.includes('방문동기')) {
+        histRows = rows;           // 이력
+      } else if (header.includes('세부상품명') && header.includes('출고')) {
+        productRows = rows;        // 세부상품
       }
 
       loaded++;
       if (loaded === files.length) {
-        doSmImport(custRows, schedRows);
+        doSmImport(custRows, schedRows, contractRows, histRows, productRows);
       }
     };
     reader.readAsArrayBuffer(file);
@@ -7278,138 +7288,225 @@ function importSmMate(e) {
   e.target.value = '';
 }
 
-function doSmImport(custRows, schedRows) {
-  if (!custRows) {
-    alert('고객 마스터 파일(총액/계약일 포함)을 찾을 수 없습니다.\n파일을 다시 확인해주세요.');
+function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
+  if (!custRows && !schedRows) {
+    alert('고객정보 또는 스케줄 파일을 찾을 수 없습니다.\n파일을 다시 확인해주세요.');
     return;
   }
 
-  const header = custRows[0];
-  const col = k => header.indexOf(k);
+  // ── 1. 이력 인덱스 (고객No → 메모 배열) ──
+  const histByNo = {};
+  if (histRows) {
+    const hh = histRows[0];
+    const hi = { no: hh.indexOf('고객No'), name: hh.indexOf('고객명'), memo: hh.indexOf('메모'), date: hh.indexOf('등록일') };
+    histRows.slice(1).forEach(r => {
+      const no = String(r[hi.no]||'').trim();
+      if (!no) return;
+      if (!histByNo[no]) histByNo[no] = [];
+      histByNo[no].push({ memo: r[hi.memo]||'', date: r[hi.date]||'' });
+    });
+  }
 
-  const C = {
-    no:       col('No'),
-    name:     col('아기') !== -1 ? col('아기') : col('고객명'),
-    product:  col('상품'),
-    contract: col('계약일'),
-    total:    col('총액'),
-    deposit:  col('선금'),
-    mid:      col('중도금'),
-    phone:    col('엄마폰') !== -1 ? col('엄마폰') : col('휴대폰'),
-    phone2:   col('아빠폰'),
-    memo:     col('메모'),
-  };
+  // ── 2. 세부상품 인덱스 (고객번호 → 상품명 배열) ──
+  const productByNo = {};
+  if (productRows) {
+    const ph = productRows[0];
+    const pi = { no: ph.indexOf('고객번호'), name: ph.indexOf('세부상품명'), out: ph.indexOf('출고') };
+    productRows.slice(1).forEach(r => {
+      const no = String(r[pi.no]||'').trim();
+      if (!no) return;
+      if (!productByNo[no]) productByNo[no] = [];
+      productByNo[no].push({ name: r[pi.name]||'', out: r[pi.out]||0 });
+    });
+  }
 
-  // 스케줄 인덱스 (전화번호 기준으로 빠른 검색)
+  // ── 3. 계약정보 인덱스 (고객번호 → 예약 배열) ──
+  const contractByNo = {};
+  const contractByPhone = {};
+  if (contractRows) {
+    const ch = contractRows[0];
+    const ci = {
+      type:   ch.indexOf('스케줄구분'),
+      date:   ch.indexOf('일자'),
+      time:   ch.indexOf('시각'),
+      title:  ch.indexOf('제목'),
+      name:   ch.indexOf('고객명'),
+      phone:  ch.indexOf('휴대폰'),
+      custno: ch.indexOf('고객번호'),
+      memo:   ch.indexOf('메모'),
+      state:  ch.indexOf('상태'),
+    };
+    contractRows.slice(1).forEach(r => {
+      const type = (r[ci.type]||'').trim();
+      if (!type || type === '메모') return;
+      const no  = String(r[ci.custno]||'').trim();
+      const ph  = (r[ci.phone]||'').trim();
+      const entry = {
+        type,
+        date:  (r[ci.date]||'').trim().replace(/\//g,'-').slice(0,10),
+        time:  (r[ci.time]||'').trim(),
+        title: (r[ci.title]||'').trim(),
+        name:  (r[ci.name]||'').trim(),
+        memo:  (r[ci.memo]||'').trim(),
+        state: (r[ci.state]||'').trim(),
+      };
+      if (no) { if (!contractByNo[no]) contractByNo[no]=[]; contractByNo[no].push(entry); }
+      if (ph) { if (!contractByPhone[ph]) contractByPhone[ph]=[]; contractByPhone[ph].push(entry); }
+    });
+  }
+
+  // ── 4. 스케줄 인덱스 (전화번호/이름 기준) ──
   const schedByPhone = {};
   const schedByName  = {};
   if (schedRows) {
     const sh = schedRows[0];
     const si = {
-      type:  sh.indexOf('스케줄구분'),
-      date:  sh.indexOf('일자'),
-      time:  sh.indexOf('시각'),
-      title: sh.indexOf('제목'),
-      name:  sh.indexOf('고객명'),
-      phone: sh.indexOf('휴대폰'),
-      memo:  sh.indexOf('메모'),
+      no:      sh.indexOf('No'),
+      custno:  sh.indexOf('고객번호'),
+      name:    sh.indexOf('아기') !== -1 ? sh.indexOf('아기') : sh.indexOf('고객명'),
+      product: sh.indexOf('상품'),
+      contract:sh.indexOf('계약일'),
+      phone:   sh.indexOf('엄마폰') !== -1 ? sh.indexOf('엄마폰') : sh.indexOf('휴대폰'),
+      phone2:  sh.indexOf('아빠폰'),
+      memo:    sh.indexOf('메모'),
+      total:   sh.indexOf('총액'),
+      deposit: sh.indexOf('선금'),
     };
     schedRows.slice(1).forEach(r => {
-      if (!r[si.type] || r[si.type] !== '촬영') return;
-      const ph  = (r[si.phone]||'').trim();
+      const ph  = (r[si.phone]||r[si.phone2]||'').trim();
       const nm  = (r[si.name]||'').trim().replace(/\(.*?\)/g,'').trim();
-      const entry = { date: r[si.date], time: r[si.time], title: r[si.title], memo: r[si.memo] };
+      const no  = String(r[si.custno]||'').trim();
+      const entry = {
+        no, date: (r[si.contract]||'').trim().replace(/\//g,'-').slice(0,10),
+        product: r[si.product]||'', phone: ph, name: nm,
+        total: parseInt(r[si.total])||0, deposit: parseInt(r[si.deposit])||0,
+        memo: r[si.memo]||'',
+      };
       if (ph) { if (!schedByPhone[ph]) schedByPhone[ph]=[]; schedByPhone[ph].push(entry); }
       if (nm) { if (!schedByName[nm])  schedByName[nm] =[];  schedByName[nm].push(entry);  }
     });
   }
 
+  // ── 5. 고객정보 메인 처리 ──
   let addedCust = 0, addedBooking = 0, skipped = 0;
-  const existingPhones = new Set(customers.map(c => c.phone));
 
-  custRows.slice(1).forEach(r => {
-    if (!r[C.name]) return;
-    const rawName   = r[C.name];
+  const masterRows = custRows || schedRows;
+  const mh = masterRows[0];
+  const mc = {
+    rowno:    mh.indexOf('고유번호') !== -1 ? mh.indexOf('고유번호') : mh.indexOf('No'),
+    name:     mh.indexOf('고객명') !== -1 ? mh.indexOf('고객명') : (mh.indexOf('아기') !== -1 ? mh.indexOf('아기') : -1),
+    custno:   mh.indexOf('고객번호'),
+    phone:    mh.indexOf('휴대폰') !== -1 ? mh.indexOf('휴대폰') : (mh.indexOf('엄마폰') !== -1 ? mh.indexOf('엄마폰') : -1),
+    phone2:   mh.indexOf('아빠폰'),
+    product:  mh.indexOf('상품명') !== -1 ? mh.indexOf('상품명') : mh.indexOf('상품'),
+    contract: mh.indexOf('계약일'),
+    total:    mh.indexOf('총액'),
+    deposit:  mh.indexOf('선금'),
+    memo:     mh.indexOf('메모'),
+  };
+
+  masterRows.slice(1).forEach(r => {
+    const rawName = (r[mc.name]||'').toString().trim();
     const cleanName = rawName.split('(')[0].trim();
     if (!cleanName) return;
 
-    const phone     = (r[C.phone]||r[C.phone2]||'').trim();
-    const smProduct = r[C.product]||'';
-    const contractDate = (r[C.contract]||'').trim().replace(/\//g,'-').slice(0,10);
-    const totalAmt  = parseInt(r[C.total])||0;
-    const depositAmt= parseInt(r[C.deposit])||0;
-    const memoTxt   = r[C.memo]||'';
+    const smCustNo  = String(r[mc.custno]||'').trim();  // SM메이트 원본 고객번호
+    const phone     = (r[mc.phone]||r[mc.phone2]||'').toString().trim();
+    const smProduct = (r[mc.product]||'').toString().trim();
+    const contractDate = (r[mc.contract]||'').toString().trim().replace(/\//g,'-').slice(0,10);
+    const totalAmt  = parseInt(r[mc.total])||0;
+    const depositAmt= parseInt(r[mc.deposit])||0;
+    const memoTxt   = (r[mc.memo]||'').toString().trim();
     const prodKey   = smProductKey(smProduct);
 
-    // 1) 고객 등록 (없으면 추가)
-    let cust = customers.find(c => c.phone && c.phone === phone && phone)
+    // 고객 등록 (전화번호 우선 → 이름 매칭)
+    let cust = (phone && customers.find(c => c.phone && c.phone === phone))
             || customers.find(c => c.name === cleanName);
+
     if (!cust) {
       cust = { name: cleanName, phone, memo: memoTxt };
       customers.push(cust);
       addedCust++;
-    }
 
-    // 2) 계약일 히스토리 (가격 포함)
-    if (contractDate) {
-      const contractId = 'sm_c_' + (r[C.no]||Date.now().toString(36));
-      const alreadyExists = bookings.find(b => b.id === contractId);
-      if (!alreadyExists) {
-        const contractBooking = {
-          id: contractId,
-          name: cleanName,
-          phone,
-          product: prodKey,
-          date: contractDate,
-          time: '',
-          adults: 2, kids: 0,
-          memo: '[SM메이트 계약] ' + smProduct
-            + (totalAmt > 0 ? ' / SM총액: ' + totalAmt.toLocaleString('ko-KR') + '원' : '')
-            + (memoTxt ? ' / ' + memoTxt : ''),
-          stage: 1,
-          stageChecks: {},
-          priceItems: [],
-          payments: { deposit: { amt: 0, method: '계좌이체' }, midterms: [] },
-          smImport: true,
-        };
-        bookings.push(contractBooking);
-        addedBooking++;
-      } else {
-        skipped++;
+      // ★ SM메이트 원본 고객번호를 custNumbers에 그대로 저장
+      if (smCustNo && !isNaN(Number(smCustNo))) {
+        const smNo = Number(smCustNo);
+        custNumbers[cleanName] = smNo;
+        // nextCustNo는 SM번호보다 항상 크게 유지 (20000 이상 보장)
+        if (smNo >= nextCustNo) nextCustNo = smNo + 1;
+        if (nextCustNo < 20000) nextCustNo = 20000;
       }
     }
 
-    // 3) 촬영일 히스토리 (스케줄에서 매칭)
-    const matched = (phone && schedByPhone[phone]) || schedByName[cleanName] || [];
-    matched.forEach((s, idx) => {
-      const shootDate = (s.date||'').trim().replace(/\//g,'-').slice(0,10);
-      if (!shootDate || shootDate === contractDate) return; // 계약일과 같으면 skip
-      const shootId = 'sm_s_' + (r[C.no]||'x') + '_' + idx;
-      if (bookings.find(b => b.id === shootId)) { skipped++; return; }
-      const shootBooking = {
-        id: shootId,
-        name: cleanName,
-        phone,
-        product: smProductKey(s.title || smProduct),
-        date: shootDate,
-        time: s.time||'',
-        adults: 2, kids: 0,
-        memo: '[SM메이트 촬영] ' + (s.title||smProduct) + (s.memo ? ' / ' + s.memo : ''),
-        stage: 7,  // 완료
-        stageChecks: {},
-        priceItems: [],
-        payments: { deposit: { amt: 0, method: '계좌이체' }, midterms: [] },
-        smImport: true,
-      };
-      bookings.push(shootBooking);
-      addedBooking++;
-    });
+    // 이력 메모 custMemos에 추가
+    if (smCustNo && histByNo[smCustNo]) {
+      if (!custMemos[cleanName]) custMemos[cleanName] = [];
+      histByNo[smCustNo].forEach(h => {
+        if (!h.memo) return;
+        const already = custMemos[cleanName].find(m => m.text === h.memo);
+        if (!already) custMemos[cleanName].push({ date: (h.date||'').slice(0,10), text: h.memo });
+      });
+    }
+
+    // 세부상품 목록 메모에 추가
+    const products = (smCustNo && productByNo[smCustNo]) || [];
+    const productSummary = products.length
+      ? '[세부상품] ' + products.map(p => p.name + (p.out ? '(출고)' : '')).join(', ')
+      : '';
+
+    // 계약/촬영 예약 등록
+    // 계약정보 파일에서 매칭
+    const contracts = (smCustNo && contractByNo[smCustNo])
+                   || (phone && contractByPhone[phone]) || [];
+
+    if (contracts.length) {
+      contracts.forEach((c, idx) => {
+        if (!c.date) return;
+        const bkId = 'sm_c_' + smCustNo + '_' + idx;
+        if (bookings.find(b => b.id === bkId)) { skipped++; return; }
+        bookings.push({
+          id: bkId, name: cleanName, phone,
+          product: smProductKey(c.title || smProduct),
+          date: c.date, time: c.time||'',
+          adults: 2, kids: 0,
+          memo: '[SM ' + c.type + '] ' + (c.title||smProduct)
+            + (totalAmt > 0 && idx===0 ? ' / 총액: ' + totalAmt.toLocaleString('ko-KR') + '원' : '')
+            + (productSummary ? '\n' + productSummary : '')
+            + (c.memo ? ' / ' + c.memo : ''),
+          stage: c.state === '완료' ? 7 : 1,
+          stageChecks: {}, priceItems: [],
+          payments: { deposit: { amt: idx===0 ? depositAmt : 0, method: '계좌이체' }, midterms: [] },
+          smImport: true,
+        });
+        addedBooking++;
+      });
+    } else if (contractDate) {
+      // 계약정보 파일 없을 때 고객정보의 계약일로 fallback
+      const bkId = 'sm_c_' + (smCustNo || cleanName) + '_0';
+      if (!bookings.find(b => b.id === bkId)) {
+        bookings.push({
+          id: bkId, name: cleanName, phone,
+          product: prodKey, date: contractDate, time: '',
+          adults: 2, kids: 0,
+          memo: '[SM메이트 계약] ' + smProduct
+            + (totalAmt > 0 ? ' / 총액: ' + totalAmt.toLocaleString('ko-KR') + '원' : '')
+            + (productSummary ? '\n' + productSummary : '')
+            + (memoTxt ? ' / ' + memoTxt : ''),
+          stage: 1, stageChecks: {}, priceItems: [],
+          payments: { deposit: { amt: depositAmt, method: '계좌이체' }, midterms: [] },
+          smImport: true,
+        });
+        addedBooking++;
+      } else { skipped++; }
+    }
   });
 
+  saveCustNumbers();
+  saveCustMemos();
   saveBookings();
   saveCustomers();
   renderAll();
-  alert(`SM메이트 가져오기 완료!\n고객 ${addedCust}명 추가\n히스토리 ${addedBooking}건 추가\n중복 건너뜀 ${skipped}건`);
+  alert(`SM메이트 가져오기 완료!\n고객 ${addedCust}명 추가\n히스토리 ${addedBooking}건 추가\n중복 건너뜀 ${skipped}건\n\n※ SM메이트 원본 고객번호가 그대로 유지됩니다.`);
 }
 
 function importData(e) {
