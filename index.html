@@ -7360,6 +7360,32 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
     });
   }
 
+  // ── 3-2. 계약정보 고객명 인덱스 (전화번호 없을 때 이름으로 매칭) ──
+  const contractByName = {};
+  if (contractRows) {
+    const ch2 = contractRows[0];
+    const ci2n = ch2.indexOf('고객명');
+    const ci2t = ch2.indexOf('스케줄구분');
+    const ci2p = ch2.indexOf('휴대폰');
+    const ci2d = ch2.indexOf('일자');
+    const ci2ti = ch2.indexOf('시각');
+    const ci2tl = ch2.indexOf('제목');
+    const ci2m = ch2.indexOf('메모');
+    const ci2s = ch2.indexOf('상태');
+    contractRows.slice(1).forEach(r => {
+      const type = (r[ci2t]||'').trim();
+      if (!type || type === '메모') return;
+      const nm = (r[ci2n]||'').trim().split('(')[0].trim();
+      if (!nm) return;
+      const entry = { type, name: nm,
+        date: (r[ci2d]||'').trim().replace(/\//g,'-').slice(0,10),
+        time: (r[ci2ti]||'').trim(), title: (r[ci2tl]||'').trim(),
+        memo: (r[ci2m]||'').trim(), state: (r[ci2s]||'').trim() };
+      if (!contractByName[nm]) contractByName[nm]=[];
+      contractByName[nm].push(entry);
+    });
+  }
+
   // ── 4. 스케줄 인덱스 (전화번호/이름 기준) ──
   const schedByPhone = {};
   const schedByName  = {};
@@ -7401,7 +7427,7 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
     rowno:    mh.indexOf('고유번호') !== -1 ? mh.indexOf('고유번호') : mh.indexOf('No'),
     name:     mh.indexOf('고객명') !== -1 ? mh.indexOf('고객명') : (mh.indexOf('아기') !== -1 ? mh.indexOf('아기') : -1),
     custno:   mh.indexOf('고객번호'),
-    phone:    mh.indexOf('휴대폰') !== -1 ? mh.indexOf('휴대폰') : (mh.indexOf('엄마폰') !== -1 ? mh.indexOf('엄마폰') : -1),
+    phone:    mh.indexOf('엄마아빠') !== -1 ? mh.indexOf('엄마아빠') : mh.indexOf('엄마폰') !== -1 ? mh.indexOf('엄마폰') : mh.indexOf('휴대폰'),
     phone2:   mh.indexOf('아빠폰'),
     product:  mh.indexOf('상품명') !== -1 ? mh.indexOf('상품명') : mh.indexOf('상품'),
     contract: mh.indexOf('계약일'),
@@ -7416,7 +7442,10 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
     if (!cleanName) return;
 
     const smCustNo  = String(r[mc.custno]||'').trim();  // SM메이트 원본 고객번호
-    const phone     = (r[mc.phone]||r[mc.phone2]||'').toString().trim();
+    const rawPhone  = (r[mc.phone]||'').toString().trim();
+    // 엄마아빠 컬럼값이 전화번호 형식이면 사용, 아니면 phone2(아빠폰) 시도
+    const phone     = /^0\d{1,2}-?\d{3,4}-?\d{4}$/.test(rawPhone.replace(/\s/g,'')) ? rawPhone
+                    : (r[mc.phone2]||'').toString().trim();
     const smProduct = (r[mc.product]||'').toString().trim();
     const contractDate = (r[mc.contract]||'').toString().trim().replace(/\//g,'-').slice(0,10);
     const totalAmt  = parseInt(r[mc.total])||0;
@@ -7462,7 +7491,8 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
     // 계약/촬영 예약 등록
     // 계약정보 파일에서 매칭
     const contracts = (smCustNo && contractByNo[smCustNo])
-                   || (phone && contractByPhone[phone]) || [];
+                   || (phone && contractByPhone[phone])
+                   || contractByName[cleanName] || [];
 
     if (contracts.length) {
       contracts.forEach((c, idx) => {
