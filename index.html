@@ -1802,7 +1802,7 @@ async function loadFromSupabase() {
     from = 0;
     while (true) {
       const { data, error } = await supa.from('contracts')
-        .select('smmate_id,customer_name,total_amount,deposit,middle_payment')
+        .select('smmate_id,customer_name,total_amount,deposit,middle_payment,contract_date')
         .range(from, from + PAGE - 1);
       if (error || !data || data.length === 0) break;
       allContracts = allContracts.concat(data);
@@ -1810,15 +1810,19 @@ async function loadFromSupabase() {
       from += PAGE;
     }
     if (allContracts.length > 0) {
-      // smmate_id 기준으로 계약 맵 생성 (고객 1명이 여러 계약 가능 → 합산)
+      // smmate_id + contract_date 기준으로 계약 맵 생성
+      // 구조: contractMap[smmate_id] = [{ date, total, deposit, mid }, ...]
       const contractMap = {};
       allContracts.forEach(c => {
         const sid = c.smmate_id;
         if (!sid) return;
-        if (!contractMap[sid]) contractMap[sid] = { total: 0, deposit: 0, mid: 0 };
-        contractMap[sid].total = Math.max(contractMap[sid].total, Number(c.total_amount || 0));
-        contractMap[sid].deposit += Number(c.deposit || 0);
-        contractMap[sid].mid += Number(c.middle_payment || 0);
+        if (!contractMap[sid]) contractMap[sid] = [];
+        contractMap[sid].push({
+          date: (c.contract_date || '').trim().replace(/\//g, '-'),
+          total: Number(c.total_amount || 0),
+          deposit: Number(c.deposit || 0),
+          mid: Number(c.middle_payment || 0),
+        });
       });
       // customers의 smmate_id로 고객명 → smmate_id 역매핑
       const nameToSmmateId = {};
@@ -1826,21 +1830,34 @@ async function loadFromSupabase() {
         const name = (c.baby_name || c.mom_name || '').trim();
         if (name && c.id) nameToSmmateId[name] = c.id;
       });
-      // bookings에 payments 매핑
+      // bookings에 payments 매핑 — 촬영일과 가장 가까운 계약일 매칭
       bookings = bookings.map(b => {
         if (!b.smmate) return b;
         const name = (b.name || '').trim();
         const sid = nameToSmmateId[name];
-        const contract = sid ? contractMap[sid] : null;
-        if (!contract || contract.total === 0) return b;
-        const totalPaid = contract.deposit + contract.mid;
-        const totalAmt = contract.total;
+        const contracts = sid ? contractMap[sid] : null;
+        if (!contracts || contracts.length === 0) return b;
+        // 촬영일과 가장 가까운 계약 찾기 (촬영일 이전 또는 같은 날 중 가장 최근)
+        const bookDate = (b.date || '').trim();
+        let matched = null;
+        if (contracts.length === 1) {
+          matched = contracts[0];
+        } else {
+          // 계약일이 촬영일 이전인 것 중 가장 가까운 것
+          const sorted = contracts
+            .filter(c => c.date && c.date <= bookDate)
+            .sort((a, b) => b.date.localeCompare(a.date));
+          matched = sorted[0] || contracts.sort((a,b) => a.date.localeCompare(b.date))[0];
+        }
+        if (!matched || matched.total === 0) return b;
+        const totalPaid = matched.deposit + matched.mid;
+        const totalAmt = matched.total;
         return {
           ...b,
           payments: {
             total: totalAmt,
-            deposit: { amt: contract.deposit, date: '' },
-            midterms: contract.mid > 0 ? [{ amt: contract.mid, date: '' }] : [],
+            deposit: { amt: matched.deposit, date: '' },
+            midterms: matched.mid > 0 ? [{ amt: matched.mid, date: '' }] : [],
           },
           currentStage: totalAmt > 0 && totalPaid >= totalAmt ? 8 : (b.currentStage || 0),
         };
