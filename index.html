@@ -1952,6 +1952,43 @@ function saveBookings() {
 }
 function saveCustomers() { scheduleSyncToSupabase(); }
 function saveDateMemos() { localStorage.setItem('gamtan_date_memos', JSON.stringify(dateMemos)); }
+
+// 출고상품 완료 토글
+async function toggleDelivery(productId, isDone, checkbox) {
+  try {
+    const { error } = await supa.from('order_products')
+      .update({ is_delivered: isDone })
+      .eq('id', productId);
+    if (error) {
+      console.error('출고 업데이트 실패:', error);
+      checkbox.checked = !isDone; // 실패시 되돌리기
+      return;
+    }
+    // UI 업데이트
+    const label = checkbox.closest('label');
+    if (label) {
+      label.style.background = isDone ? '#dcfce7' : '#f3f4f6';
+      label.style.color = isDone ? '#166534' : '#6b7280';
+      label.style.borderColor = isDone ? '#86efac' : '#d1d5db';
+      label.textContent = '';
+      label.appendChild(checkbox);
+      label.append(checkbox.nextSibling?.textContent?.replace(' ✅','') || '');
+      if (isDone) label.append(' ✅');
+    }
+    // 캐시 업데이트
+    if (window._smProducts) {
+      for (const name of Object.keys(window._smProducts)) {
+        for (const cno of Object.keys(window._smProducts[name])) {
+          const prod = window._smProducts[name][cno].find(p => p.id == productId);
+          if (prod) prod.is_delivered = isDone;
+        }
+      }
+    }
+  } catch(e) {
+    console.error('출고 토글 오류:', e);
+    checkbox.checked = !isDone;
+  }
+}
 function saveCustMemos() {
   // Supabase customers 테이블 memo 컬럼에 저장
   if (typeof supa !== 'undefined' && currentUser) {
@@ -2512,10 +2549,21 @@ function buildPriceBox(b) {
         if (!matchedProds || matchedProds.length === 0) return '';
         return `<div style="margin-top:10px;padding-top:10px;border-top:1px solid #bbf7d0">
           <div style="font-size:11px;font-weight:700;color:#166534;margin-bottom:6px">📦 출고 상품</div>
-          <div style="display:flex;flex-wrap:wrap;gap:4px">
-            ${matchedProds.map(p => 
-              `<span style="background:#dcfce7;color:#166534;border-radius:5px;padding:2px 8px;font-size:11px">${p.product_detail}${p.delivery_status ? ' ('+p.delivery_status+')' : ''}</span>`
-            ).join('')}
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            ${matchedProds.map(p => {
+              const done = p.is_delivered;
+              return `<label style="display:flex;align-items:center;gap:4px;cursor:pointer;
+                background:${done?'#dcfce7':'#f3f4f6'};
+                color:${done?'#166534':'#6b7280'};
+                border:1.5px solid ${done?'#86efac':'#d1d5db'};
+                border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600">
+                <input type="checkbox" ${done?'checked':''} 
+                  style="accent-color:#16a34a;cursor:pointer"
+                  onchange="toggleDelivery('${p.id}', this.checked, this)">
+                ${p.product_detail}${p.delivery_status ? ' ('+p.delivery_status+')' : ''}
+                ${done ? ' ✅' : ''}
+              </label>`;
+            }).join('')}
           </div>
         </div>`;
       })()}
@@ -6150,7 +6198,7 @@ async function showCustDetail(name) {
       // 출고상품 불러오기 → smmate_id 기준, 계약번호별로 그룹핑
       if (smmateId && smmateId < 20000) {
         const { data: prods } = await supa.from('order_products')
-          .select('product_detail,delivery_status,contract_no')
+          .select('id,product_detail,delivery_status,contract_no,is_delivered')
           .eq('customer_id', String(smmateId));
         if (prods && prods.length > 0) {
           // 계약번호별로 그룹핑
