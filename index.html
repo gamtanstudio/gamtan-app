@@ -1767,24 +1767,23 @@ async function loadFromSupabase() {
       allCust.forEach(c => {
         const name = (c.baby_name || c.mom_name || '').trim();
         if (!name) return;
-        if (!customers[name]) customers[name] = {};
-        customers[name].smmate_id = c.id;
-        customers[name].customer_no = c.customer_no;
-        customers[name].mom_phone = c.mom_phone;
-        customers[name].dad_phone = c.dad_phone;
+        // custProfiles에 SM메이트 상세 정보 저장 (customers 배열과 분리)
+        if (!custProfiles[name]) custProfiles[name] = {};
+        custProfiles[name].smmate_id = c.id;
+        custProfiles[name].customer_no = c.customer_no;
+        custProfiles[name].mom_phone = c.mom_phone || c.dad_phone;
+        custProfiles[name].last_visit = c.last_visit;
         // 상담메모: SM메이트 고객 메모 → 앱 상담메모(custMemos)
         if (c.memo && c.memo.trim()) {
-          const memoText = c.memo.trim().substring(0, 500); // 500자 제한
-          customers[name].counselMemo = memoText;
+          const memoText = c.memo.trim().substring(0, 500);
           if (!custMemos[name]) custMemos[name] = memoText;
         }
-        customers[name].total_amount = c.total_amount;
-        customers[name].deposit = c.deposit;
-        customers[name].last_visit = c.last_visit;
         // ★ 고객번호 매핑: SM메이트 No(c.id)를 그대로 사용 (항상 20000 미만)
         if (c.id && c.id > 0 && c.id < 20000) {
           custNumbers[name] = c.id;
         }
+        // customers 배열에 이름 추가 (없으면)
+        if (!customers.includes(name)) customers.push(name);
       });
       // customers는 용량이 크므로 메모리에만 유지, custNumbers와 custMemos만 저장
       try {
@@ -2549,20 +2548,10 @@ function buildPriceBox(b) {
         if (!matchedProds || matchedProds.length === 0) return '';
         return `<div style="margin-top:10px;padding-top:10px;border-top:1px solid #bbf7d0">
           <div style="font-size:11px;font-weight:700;color:#166534;margin-bottom:6px">📦 출고 상품</div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px">
-            ${matchedProds.map(p => {
-              const done = p.is_delivered;
-              return `<label style="display:flex;align-items:center;gap:4px;cursor:pointer;
-                background:${done?'#dcfce7':'#f3f4f6'};
-                color:${done?'#166534':'#6b7280'};
-                border:1.5px solid ${done?'#86efac':'#d1d5db'};
-                border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600">
-                <input type="checkbox" ${done?'checked':''} 
-                  style="accent-color:#16a34a;cursor:pointer"
-                  onchange="toggleDelivery('${p.id}', this.checked, this)">
-                ${p.product_detail}${done ? ' ✅' : ''}
-              </label>`;
-            }).join('')}
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            ${matchedProds.map(p => 
+              `<span style="background:#dcfce7;color:#166534;border-radius:5px;padding:2px 8px;font-size:11px;font-weight:600">${p.product_detail}</span>`
+            ).join('')}
           </div>
         </div>`;
       })()}
