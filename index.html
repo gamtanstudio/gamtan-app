@@ -2467,6 +2467,15 @@ function buildPriceBox(b) {
           <div style="font-size:13px;font-weight:800;color:${isPaid?'#166534':'#dc2626'}">${remain.toLocaleString()}원 ${isPaid?'✅':''}</div>
         </div>
       </div>
+      ${(window._smProducts && window._smProducts[b.name] && window._smProducts[b.name].length > 0) ? 
+        `<div style="margin-top:10px;padding-top:10px;border-top:1px solid #bbf7d0">
+          <div style="font-size:11px;font-weight:700;color:#166534;margin-bottom:6px">📦 출고 상품</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            ${(window._smProducts[b.name]||[]).map(p => 
+              `<span style="background:#dcfce7;color:#166534;border-radius:5px;padding:2px 8px;font-size:11px">${p.product_detail}${p.delivery_status ? ' ('+p.delivery_status+')' : ''}</span>`
+            ).join('')}
+          </div>
+        </div>` : ''}
     </div>`;
   }
   initPriceItems(b);
@@ -6087,13 +6096,23 @@ async function showCustDetail(name) {
           .limit(50);
         if (recs && recs.length > 0) {
           if (!custLogs[name]) custLogs[name] = [];
-          // 기존 smmate 기록 제거 후 최신으로 교체
           custLogs[name] = custLogs[name].filter(l => l.from !== 'smmate');
           recs.forEach(r => {
             if (r.memo && r.memo.trim()) {
               custLogs[name].push({ dt: r.recorded_at ? r.recorded_at.split(' ')[0] : '', tm: '', text: r.memo.trim(), from: 'smmate' });
             }
           });
+        }
+      }
+      // 출고상품 불러오기 → smmate_id 기준
+      if (smmateId && smmateId < 20000) {
+        const { data: prods } = await supa.from('order_products')
+          .select('product_detail,delivery_status,contract_no')
+          .eq('customer_id', String(smmateId));
+        if (prods && prods.length > 0) {
+          // 전역 변수에 저장 (렌더링에서 사용)
+          window._smProducts = window._smProducts || {};
+          window._smProducts[name] = prods.filter(p => p.product_detail);
         }
       }
     } catch(e) { console.warn('방문기록 로드 실패:', e); }
