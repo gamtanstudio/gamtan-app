@@ -2560,8 +2560,7 @@ function buildPriceBox(b) {
                 <input type="checkbox" ${done?'checked':''} 
                   style="accent-color:#16a34a;cursor:pointer"
                   onchange="toggleDelivery('${p.id}', this.checked, this)">
-                ${p.product_detail}${p.delivery_status ? ' ('+p.delivery_status+')' : ''}
-                ${done ? ' ✅' : ''}
+                ${p.product_detail}${done ? ' ✅' : ''}
               </label>`;
             }).join('')}
           </div>
