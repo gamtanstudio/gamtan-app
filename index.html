@@ -1797,12 +1797,12 @@ async function loadFromSupabase() {
 
     // 방문기록은 고객 상세 열 때 Supabase에서 직접 불러옴 (지연 로딩)
 
-    // 계약 데이터 불러오기 → payments 매핑
+    // 계약 데이터 불러오기 → payments 매핑 (smmate_id 기준)
     let allContracts = [];
     from = 0;
     while (true) {
       const { data, error } = await supa.from('contracts')
-        .select('customer_no,total_amount,deposit,middle_payment,contract_no')
+        .select('smmate_id,customer_name,total_amount,deposit,middle_payment')
         .range(from, from + PAGE - 1);
       if (error || !data || data.length === 0) break;
       allContracts = allContracts.concat(data);
@@ -1810,22 +1810,29 @@ async function loadFromSupabase() {
       from += PAGE;
     }
     if (allContracts.length > 0) {
-      // customer_no 기준으로 계약 맵 생성
+      // smmate_id 기준으로 계약 맵 생성 (고객 1명이 여러 계약 가능 → 합산)
       const contractMap = {};
       allContracts.forEach(c => {
-        const no = (c.customer_no || '').trim();
-        if (!no) return;
-        if (!contractMap[no]) contractMap[no] = { total: 0, deposit: 0, mid: 0 };
-        contractMap[no].total = Math.max(contractMap[no].total, Number(c.total_amount || 0));
-        contractMap[no].deposit += Number(c.deposit || 0);
-        contractMap[no].mid += Number(c.middle_payment || 0);
+        const sid = c.smmate_id;
+        if (!sid) return;
+        if (!contractMap[sid]) contractMap[sid] = { total: 0, deposit: 0, mid: 0 };
+        contractMap[sid].total = Math.max(contractMap[sid].total, Number(c.total_amount || 0));
+        contractMap[sid].deposit += Number(c.deposit || 0);
+        contractMap[sid].mid += Number(c.middle_payment || 0);
+      });
+      // customers의 smmate_id로 고객명 → smmate_id 역매핑
+      const nameToSmmateId = {};
+      allCust.forEach(c => {
+        const name = (c.baby_name || c.mom_name || '').trim();
+        if (name && c.id) nameToSmmateId[name] = c.id;
       });
       // bookings에 payments 매핑
       bookings = bookings.map(b => {
         if (!b.smmate) return b;
-        const no = (b.customer_no || '').trim();
-        const contract = contractMap[no];
-        if (!contract) return b;
+        const name = (b.name || '').trim();
+        const sid = nameToSmmateId[name];
+        const contract = sid ? contractMap[sid] : null;
+        if (!contract || contract.total === 0) return b;
         const totalPaid = contract.deposit + contract.mid;
         const totalAmt = contract.total;
         return {
@@ -1835,11 +1842,9 @@ async function loadFromSupabase() {
             deposit: { amt: contract.deposit, date: '' },
             midterms: contract.mid > 0 ? [{ amt: contract.mid, date: '' }] : [],
           },
-          // 총액이 있고 입금액이 총액과 같으면 완납으로 처리
           currentStage: totalAmt > 0 && totalPaid >= totalAmt ? 8 : (b.currentStage || 0),
         };
       });
-      localStorage.setItem('gamtan_bookings', JSON.stringify(bookings.filter(b => !b.smmate)));
     }
 
     showSyncStatus('✅ 최신 데이터 (' + allSched.length + '건)');
