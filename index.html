@@ -1737,7 +1737,7 @@ async function loadFromSupabase() {
           customer_no: (s.customer_no || '').trim(),
           status: s.status,
           adults: 2, kids: 0,
-          note: (s.memo || '').trim(),  // 스케줄 메모 → 히스토리 작은 메모
+          visitNote: (s.memo || '').trim(),  // 스케줄 메모 → 히스토리 오른쪽 위 메모
         };
       }).filter(b => b.name && b.date);
 
@@ -1848,7 +1848,7 @@ function applyAllData(d) {
   if (d.dateMemos) { dateMemos = d.dateMemos; localStorage.setItem('gamtan_date_memos', JSON.stringify(dateMemos)); }
   if (d.custMemos) { custMemos = d.custMemos; localStorage.setItem('gamtan_cust_memos', JSON.stringify(custMemos)); }
   if (d.custProfiles) { custProfiles = d.custProfiles; localStorage.setItem('gamtan_cust_profiles', JSON.stringify(custProfiles)); }
-  if (d.custLogs) { custLogs = d.custLogs; localStorage.setItem('gamtan_cust_logs', JSON.stringify(custLogs)); }
+  if (d.custLogs) { custLogs = d.custLogs; } // localStorage 저장 안 함 (용량 초과)
   if (d.custExtra) { custExtra = d.custExtra; localStorage.setItem('gamtan_cust_extra', JSON.stringify(custExtra)); }
   if (d.custNumbers) { custNumbers = d.custNumbers; localStorage.setItem('gamtan_cust_numbers', JSON.stringify(custNumbers)); }
   if (d.nextCustNo) { nextCustNo = d.nextCustNo; localStorage.setItem('gamtan_next_cust_no', String(nextCustNo)); }
@@ -3123,7 +3123,7 @@ function softRefresh() {
   // localStorage에서 최신 데이터 다시 로드
   bookings    = JSON.parse(localStorage.getItem('gamtan_bookings')||'[]');
   custMemos   = JSON.parse(localStorage.getItem('gamtan_cust_memos')||'{}');
-  custLogs    = JSON.parse(localStorage.getItem('gamtan_cust_logs')||'{}');
+  custLogs    = {}; // Supabase에서 필요시 로드
   // 현재 뷰 그대로 유지하며 렌더
   if(currentView === 'month') {
     renderMonthCal();
