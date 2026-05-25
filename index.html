@@ -6195,7 +6195,7 @@ async function showCustDetail(name) {
   // 통계 계산
   const custNo = getCustNo(name);
   const totalVisits = bks.length; // 실제 예약만 카운트
-  const totalSpent = bks.reduce((s,b)=>s+(b.priceItems?priceTotal(b):0),0);
+  const totalSpent = bks.reduce((s,b)=>s+(b.priceItems?priceTotal(b):(b.smmate&&b.payments?.total?b.payments.total:0)),0);
   const totalPaid  = bks.reduce((s,b)=>s+(b.payments?paidTotal(b):0),0);
   const allPhone = allBks.map(x=>x.phone).filter(Boolean); // placeholder 포함해서 전화번호 수집
   const allEmail = allBks.map(x=>x.email).filter(Boolean);
@@ -7081,7 +7081,7 @@ function refreshHistAmt(bid, custName) {
 function refreshCustStats(custName) {
   const bks = bookings.filter(b=>b.name===custName);
   const key = custName.replace(/\s/g,'_');
-  const totalSpent  = bks.filter(b=>!b.cancelled&&!b.postponed).reduce((s,b)=>s+(b.priceItems?priceTotal(b):0),0);
+  const totalSpent  = bks.filter(b=>!b.cancelled&&!b.postponed).reduce((s,b)=>s+(b.priceItems?priceTotal(b):(b.smmate&&b.payments?.total?b.payments.total:0)),0);
   const totalVisits = bks.filter(b=>!b.cancelled&&!b.postponed).length;
   const elV = document.getElementById('cust-stat-visits-'+key);
   const elS = document.getElementById('cust-stat-spent-'+key);
