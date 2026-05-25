@@ -1773,8 +1773,9 @@ async function loadFromSupabase() {
         customers[name].dad_phone = c.dad_phone;
         // 상담메모: SM메이트 고객 메모 → 앱 상담메모(custMemos)
         if (c.memo && c.memo.trim()) {
-          customers[name].counselMemo = c.memo.trim();
-          if (!custMemos[name]) custMemos[name] = c.memo.trim();
+          const memoText = c.memo.trim().substring(0, 500); // 500자 제한
+          customers[name].counselMemo = memoText;
+          if (!custMemos[name]) custMemos[name] = memoText;
         }
         customers[name].total_amount = c.total_amount;
         customers[name].deposit = c.deposit;
@@ -1784,47 +1785,16 @@ async function loadFromSupabase() {
           custNumbers[name] = c.id;
         }
       });
-      localStorage.setItem('gamtan_customers', JSON.stringify(customers));
-      localStorage.setItem('gamtan_cust_numbers', JSON.stringify(custNumbers));
-      localStorage.setItem('gamtan_cust_memos', JSON.stringify(custMemos));
+      // customers는 용량이 크므로 메모리에만 유지, custNumbers와 custMemos만 저장
+      try {
+        localStorage.setItem('gamtan_cust_numbers', JSON.stringify(custNumbers));
+        localStorage.setItem('gamtan_cust_memos', JSON.stringify(custMemos));
+      } catch(e) {
+        console.warn('localStorage 저장 실패 (용량 초과):', e);
+      }
     }
 
-    // 방문기록 로드 → 고객별 히스토리 메모로 매핑
-    let allRecords = [];
-    from = 0;
-    while (true) {
-      const { data, error } = await supa.from('visit_records')
-        .select('recorded_at,customer_no,customer_name,memo')
-        .order('recorded_at', { ascending: false })
-        .range(from, from + PAGE - 1);
-      if (error || !data || data.length === 0) break;
-      allRecords = allRecords.concat(data);
-      if (data.length < PAGE) break;
-      from += PAGE;
-    }
-    if (allRecords.length > 0) {
-      // 고객No 기준으로 그룹핑
-      const recByNo = {};
-      allRecords.forEach(r => {
-        const no = (r.customer_no || '').trim();
-        if (!no) return;
-        if (!recByNo[no]) recByNo[no] = [];
-        if (r.memo && r.memo.trim()) recByNo[no].push({ date: r.recorded_at, memo: r.memo.trim() });
-      });
-      // custLogs에 반영
-      allCust.forEach(c => {
-        const name = (c.baby_name || c.mom_name || '').trim();
-        if (!name) return;
-        const no = String(c.id);
-        if (recByNo[no] && recByNo[no].length > 0) {
-          if (!custLogs[name]) custLogs[name] = [];
-          recByNo[no].forEach(rec => {
-            custLogs[name].push({ date: rec.date ? rec.date.split(' ')[0] : '', text: rec.memo, from: 'smmate' });
-          });
-        }
-      });
-      localStorage.setItem('gamtan_cust_logs', JSON.stringify(custLogs));
-    }
+    // 방문기록은 고객 상세 열 때 Supabase에서 직접 불러옴 (지연 로딩)
 
     showSyncStatus('✅ 최신 데이터 (' + allSched.length + '건)');
     if (typeof renderMonthCal === 'function') renderMonthCal();
@@ -1905,10 +1875,27 @@ function scheduleSyncToSupabase() {
 }
 // ===== 구글 시트 연동 끝 =====
 
-function saveBookings() { scheduleSyncToSupabase(); }
+function saveBookings() {
+  // 신규 예약(sm_ 아닌 것)만 Supabase에 저장
+  scheduleSyncToSupabase();
+  try { localStorage.setItem('gamtan_bookings', JSON.stringify(bookings.filter(b=>!b.smmate))); } catch(e) {}
+}
 function saveCustomers() { scheduleSyncToSupabase(); }
 function saveDateMemos() { localStorage.setItem('gamtan_date_memos', JSON.stringify(dateMemos)); }
-function saveCustMemos() { scheduleSyncToSupabase(); }
+function saveCustMemos() {
+  // Supabase customers 테이블 memo 컬럼에 저장
+  if (typeof supa !== 'undefined' && currentUser) {
+    Object.entries(custMemos).forEach(async ([name, memo]) => {
+      const custId = custNumbers[name];
+      if (custId && custId < 20000) {
+        // SM메이트 고객 - id로 업데이트
+        await supa.from('customers').update({ memo }).eq('id', custId);
+      }
+    });
+  }
+  // 로컬에도 저장
+  try { localStorage.setItem('gamtan_cust_memos', JSON.stringify(custMemos)); } catch(e) {}
+}
 function saveCustProfiles() { localStorage.setItem('gamtan_cust_profiles', JSON.stringify(custProfiles)); }
 function setCustProfile(name, field, val) {
   if(!custProfiles[name]) custProfiles[name] = {};
@@ -6007,9 +5994,33 @@ function goToCust(name) {
   }, 150);
 }
 
-function showCustDetail(name) {
+async function showCustDetail(name) {
   const allBks = bookings.filter(b=>b.name===name).sort((a,bb)=>a.date.localeCompare(bb.date)||a.time.localeCompare(bb.time));
   if(!allBks.length) return;
+  // SM메이트 방문기록 Supabase에서 불러오기 (지연 로딩)
+  if (typeof supa !== 'undefined') {
+    try {
+      const custId = Object.keys(custNumbers).find(k => k === name);
+      const smmateId = custId ? custNumbers[custId] : null;
+      if (smmateId && smmateId < 20000) {
+        const { data: recs } = await supa.from('visit_records')
+          .select('recorded_at,memo')
+          .eq('customer_no', String(smmateId))
+          .order('recorded_at', { ascending: false })
+          .limit(50);
+        if (recs && recs.length > 0) {
+          if (!custLogs[name]) custLogs[name] = [];
+          // 기존 smmate 기록 제거 후 최신으로 교체
+          custLogs[name] = custLogs[name].filter(l => l.from !== 'smmate');
+          recs.forEach(r => {
+            if (r.memo && r.memo.trim()) {
+              custLogs[name].push({ dt: r.recorded_at ? r.recorded_at.split(' ')[0] : '', tm: '', text: r.memo.trim(), from: 'smmate' });
+            }
+          });
+        }
+      }
+    } catch(e) { console.warn('방문기록 로드 실패:', e); }
+  }
   // placeholder 예약 제외한 실제 예약 목록 (히스토리 카드 표시용)
   const bks = allBks.filter(b=>!b._phonePlaceholder);
   // 전화번호는 모든 예약에서 수집 (placeholder 포함)
