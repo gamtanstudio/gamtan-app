@@ -1738,6 +1738,7 @@ async function loadFromSupabase() {
           status: s.status,
           adults: 2, kids: 0,
           visitNote: (s.memo || '').trim(),  // 스케줄 메모 → 히스토리 오른쪽 위 메모
+          memo: '',  // 노란 메모란은 비움 (visitNote로 이동)
         };
       }).filter(b => b.name && b.date);
 
