@@ -439,47 +439,48 @@ body{font-family:'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif
 #lightbox-prev{left:12px}
 #lightbox-next{right:12px}
 </style>
+
+<!-- Supabase SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+// Supabase 즉시 초기화
+const SUPA_URL = 'https://kpznjpyovlkcstzvqdtb.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtwem5qcHlvdmxrY3N0enZxZHRiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0ODQyNDIsImV4cCI6MjA5NTA2MDI0Mn0.2utg9_0UUKN_aWu0t7gHcjle5IeB_tmRSHcCdrvqmnw';
+const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
+let currentUser = null;
+let userRole = 'staff';
+</script>
+<style>
+#login-screen{position:fixed;inset:0;background:#1a1a2e;display:flex;align-items:center;justify-content:center;z-index:99999;flex-direction:column;gap:0}
+.login-box{background:#fff;border-radius:20px;padding:40px 36px 32px;width:340px;max-width:92vw;box-shadow:0 8px 40px rgba(0,0,0,.35);text-align:center}
+.login-logo{font-size:28px;font-weight:900;color:#1a1a2e;letter-spacing:2px;margin-bottom:4px}
+.login-sub{font-size:13px;color:#888;margin-bottom:28px}
+.login-input{width:100%;border:1.5px solid #e0e0e0;border-radius:10px;padding:12px 14px;font-size:15px;margin-bottom:12px;outline:none;font-family:inherit;box-sizing:border-box;transition:border .2s}
+.login-input:focus{border-color:#6366f1}
+.login-btn{width:100%;background:#1a1a2e;color:#fff;border:none;border-radius:10px;padding:13px;font-size:16px;font-weight:700;cursor:pointer;margin-top:4px;transition:background .2s}
+.login-btn:hover{background:#2d2d4e}
+.login-err{color:#ef4444;font-size:13px;margin-top:8px;min-height:20px}
+.login-loading{color:#6366f1;font-size:13px;margin-top:8px}
+</style>
 </head>
 <body>
-
-<!-- 비밀번호 잠금 화면 -->
-<div id="lock-screen" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#1a1a2e;display:flex;align-items:center;justify-content:center;z-index:99999">
-  <div style="background:#fff;border-radius:16px;padding:40px;text-align:center;width:300px;box-shadow:0 8px 32px rgba(0,0,0,0.3)">
-    <div style="font-size:40px;margin-bottom:12px">📷</div>
-    <div style="font-size:18px;font-weight:700;color:#333;margin-bottom:6px">감탄사진관</div>
-    <div style="font-size:13px;color:#888;margin-bottom:24px">통합관리 시스템</div>
-    <input id="lock-input" type="password" placeholder="비밀번호 입력" 
-      style="width:100%;border:2px solid #e0e0e0;border-radius:8px;padding:10px 14px;font-size:16px;outline:none;box-sizing:border-box;text-align:center;letter-spacing:4px"
-      onkeydown="if(event.key==='Enter')checkPassword()">
-    <div id="lock-error" style="color:#e53e3e;font-size:12px;margin-top:8px;height:16px"></div>
-    <button onclick="checkPassword()" 
-      style="width:100%;background:#7c3aed;color:#fff;border:none;border-radius:8px;padding:12px;font-size:15px;font-weight:700;cursor:pointer;margin-top:12px">
-      입장
-    </button>
+<!-- 로그인 화면 -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">감탄사진관</div>
+    <div class="login-sub">통합 관리 시스템</div>
+    <input class="login-input" type="email" id="login-email" placeholder="이메일" autocomplete="email">
+    <input class="login-input" type="password" id="login-pw" placeholder="비밀번호" autocomplete="current-password"
+      onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="login-btn" onclick="doLogin()">로그인</button>
+    <div class="login-err" id="login-err"></div>
   </div>
 </div>
 
-<script>
-const APP_PASSWORD = 'gamtan3639';
-function checkPassword() {
-  const val = document.getElementById('lock-input').value;
-  if (val === APP_PASSWORD) {
-    document.getElementById('lock-screen').style.display = 'none';
-    sessionStorage.setItem('gamtan_auth', '1');
-  } else {
-    document.getElementById('lock-error').textContent = '비밀번호가 틀렸습니다';
-    document.getElementById('lock-input').value = '';
-    document.getElementById('lock-input').focus();
-  }
-}
-// 이미 인증된 경우 바로 통과
-if (sessionStorage.getItem('gamtan_auth') === '1') {
-  document.addEventListener('DOMContentLoaded', function() {
-    const ls = document.getElementById('lock-screen');
-    if (ls) ls.style.display = 'none';
-  });
-}
-</script>
+
+<!-- lock-screen 제거 (Supabase 로그인으로 대체) -->
+
+
 
 <div id="header">
   <h1 onclick="setView('month')" style="cursor:pointer">📷 감탄사진관 통합 관리</h1>
@@ -1587,7 +1588,7 @@ function selectReferrer(safeName, val) {
   const input = document.getElementById('cx-referrer-'+safeName);
   if(input) input.value = val;
 }
-function saveCustLogs() { scheduleSyncToSheet(); }
+function saveCustLogs() { scheduleSyncToSupabase(); }
 function addCustLog(name, text) {
   if(!custLogs[name]) custLogs[name] = [];
   const now = new Date();
@@ -1630,9 +1631,238 @@ function getCustNo(name) {
   return String(custNumbers[name]).padStart(5,'0');
 }
 
-// ===== 구글 시트 연동 =====
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbxj2ab7sVt4Wxbr5mgh0aY3_-04DeD0raf8ZApDv4GdJVoIgcqP2E98OTaYoQPfqD5JWg/exec';
+// ===== Supabase 연동 =====
+// (초기화는 head에서 완료)
 let syncTimer = null;
+
+// 로그인
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pw = document.getElementById('login-pw').value;
+  const errEl = document.getElementById('login-err');
+  errEl.textContent = '로그인 중...';
+  errEl.style.color = '#6366f1';
+  const { data, error } = await supa.auth.signInWithPassword({ email, password: pw });
+  if (error) {
+    errEl.textContent = '이메일 또는 비밀번호가 틀렸어요';
+    errEl.style.color = '#ef4444';
+    return;
+  }
+  await onLoginSuccess(data.user);
+}
+
+async function onLoginSuccess(user) {
+  currentUser = user;
+  // 권한 확인
+  const { data: roleData } = await supa.from('user_roles').select('role').eq('user_id', user.id).single();
+  userRole = roleData?.role || 'staff';
+  // 매출 관련 UI 권한 적용
+  applyRoleUI();
+  // 로그인 화면 숨기기
+  document.getElementById('login-screen').style.display = 'none';
+  // 데이터 로드
+  showSyncStatus('🔄 불러오는 중...');
+  await loadFromSupabase();
+}
+
+function applyRoleUI() {
+  // 직원은 매출 탭 숨기기
+  if (userRole !== 'owner') {
+    document.querySelectorAll('.owner-only').forEach(el => el.style.display = 'none');
+  }
+}
+
+// SM메이트 제목 → 앱 상품코드 매핑
+function smTitleToProduct(title) {
+  const t = (title||'').trim();
+  if (!t) return 'story';
+  if (t.includes('증명') || t.includes('여권') || t.includes('비자') ||
+      t.includes('운전') || t.includes('사원') || t.includes('신분') ||
+      t.includes('주민') || t.includes('반명함') || t.includes('서류') ||
+      t.includes('원서') || t.includes('선수') || t.includes('학생')) return 'id';
+  if (t.includes('대가족')) return 'bigfam';
+  if (t.includes('성장') || t.includes('가족성장')) return 'growth';
+  if (t.includes('프로필') || t.includes('화보') || t.includes('개인')) return 'profile';
+  if (t.includes('장수') || t.includes('영정') || t.includes('복원')) return 'jangsu';
+  if (t.includes('심플') || t.includes('1컷') || t.includes('커플') ||
+      t.includes('우정') || t.includes('만삭') || t.includes('백일') ||
+      t.includes('돌') || t.includes('기념')) return 'simpfam';
+  if (t.includes('가족') || t.includes('페밀리') || t.includes('패밀리') ||
+      t.includes('family') || t.includes('Family') || t.includes('스냅')) return 'story';
+  return 'story';
+}
+
+// Supabase에서 데이터 로드
+async function loadFromSupabase() {
+  try {
+    showSyncStatus('🔄 불러오는 중...');
+
+    // 스케줄(촬영) 불러오기 — 페이지네이션 (최대 10000건)
+    let allSched = [];
+    let from = 0;
+    const PAGE = 1000;
+    while (true) {
+      const { data, error } = await supa.from('schedules')
+        .select('new_id,smmate_id,schedule_date,schedule_time,customer_name,phone,customer_no,title,memo,status')
+        .ilike('schedule_type', '%촬영%')
+        .order('schedule_date', { ascending: false })
+        .range(from, from + PAGE - 1);
+      if (error || !data || data.length === 0) break;
+      allSched = allSched.concat(data);
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+
+    if (allSched.length > 0) {
+      const imported = allSched.map(s => {
+        // 날짜: '2026/05/21' 또는 ' 2026/05/21' → '2026-05-21'
+        const rawDate = (s.schedule_date || '').trim();
+        const date = rawDate.replace(/\//g, '-');
+        // 시간: ' 11:00' → '11:00'
+        const time = (s.schedule_time || '').trim();
+        // 고객명
+        const name = (s.customer_name || '').trim();
+        // 상품 코드
+        const product = smTitleToProduct(s.title);
+        return {
+          id: 'sm_' + s.new_id,
+          name,
+          date,
+          time,
+          product,
+          phone: (s.phone || '').trim(),
+          memo: (s.memo || '').trim(),
+          smmate: true,
+          smmate_id: s.smmate_id,
+          customer_no: (s.customer_no || '').trim(),
+          status: s.status,
+          adults: 2, kids: 0,
+          note: (s.memo || '').trim(),  // 스케줄 메모 → 히스토리 작은 메모
+        };
+      }).filter(b => b.name && b.date);
+
+      // localStorage 기존 신규예약(sm_ 아닌 것)과 합치기
+      const localBks = JSON.parse(localStorage.getItem('gamtan_bookings')||'[]');
+      const localOnly = localBks.filter(b => !b.smmate);
+      bookings = [...imported, ...localOnly];
+      localStorage.setItem('gamtan_bookings', JSON.stringify(bookings));
+    }
+
+    // 고객 정보 불러오기 — 페이지네이션
+    let allCust = [];
+    from = 0;
+    while (true) {
+      const { data, error } = await supa.from('customers')
+        .select('id,baby_name,mom_name,dad_name,mom_phone,dad_phone,customer_no,memo,total_amount,deposit,last_visit')
+        .order('id')
+        .range(from, from + PAGE - 1);
+      if (error || !data || data.length === 0) break;
+      allCust = allCust.concat(data);
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+
+    if (allCust.length > 0) {
+      allCust.forEach(c => {
+        const name = (c.baby_name || c.mom_name || '').trim();
+        if (!name) return;
+        if (!customers[name]) customers[name] = {};
+        customers[name].smmate_id = c.id;
+        customers[name].customer_no = c.customer_no;
+        customers[name].mom_phone = c.mom_phone;
+        customers[name].dad_phone = c.dad_phone;
+        // 상담메모: SM메이트 고객 메모 → 앱 상담메모(custMemos)
+        if (c.memo && c.memo.trim()) {
+          customers[name].counselMemo = c.memo.trim();
+          if (!custMemos[name]) custMemos[name] = c.memo.trim();
+        }
+        customers[name].total_amount = c.total_amount;
+        customers[name].deposit = c.deposit;
+        customers[name].last_visit = c.last_visit;
+        // ★ 고객번호 매핑: SM메이트 No(c.id)를 그대로 사용 (항상 20000 미만)
+        if (c.id && c.id > 0 && c.id < 20000) {
+          custNumbers[name] = c.id;
+        }
+      });
+      localStorage.setItem('gamtan_customers', JSON.stringify(customers));
+      localStorage.setItem('gamtan_cust_numbers', JSON.stringify(custNumbers));
+      localStorage.setItem('gamtan_cust_memos', JSON.stringify(custMemos));
+    }
+
+    // 방문기록 로드 → 고객별 히스토리 메모로 매핑
+    let allRecords = [];
+    from = 0;
+    while (true) {
+      const { data, error } = await supa.from('visit_records')
+        .select('recorded_at,customer_no,customer_name,memo')
+        .order('recorded_at', { ascending: false })
+        .range(from, from + PAGE - 1);
+      if (error || !data || data.length === 0) break;
+      allRecords = allRecords.concat(data);
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+    if (allRecords.length > 0) {
+      // 고객No 기준으로 그룹핑
+      const recByNo = {};
+      allRecords.forEach(r => {
+        const no = (r.customer_no || '').trim();
+        if (!no) return;
+        if (!recByNo[no]) recByNo[no] = [];
+        if (r.memo && r.memo.trim()) recByNo[no].push({ date: r.recorded_at, memo: r.memo.trim() });
+      });
+      // custLogs에 반영
+      allCust.forEach(c => {
+        const name = (c.baby_name || c.mom_name || '').trim();
+        if (!name) return;
+        const no = String(c.id);
+        if (recByNo[no] && recByNo[no].length > 0) {
+          if (!custLogs[name]) custLogs[name] = [];
+          recByNo[no].forEach(rec => {
+            custLogs[name].push({ date: rec.date ? rec.date.split(' ')[0] : '', text: rec.memo, from: 'smmate' });
+          });
+        }
+      });
+      localStorage.setItem('gamtan_cust_logs', JSON.stringify(custLogs));
+    }
+
+    showSyncStatus('✅ 최신 데이터 (' + allSched.length + '건)');
+    if (typeof renderMonthCal === 'function') renderMonthCal();
+    if (typeof renderList === 'function') renderList();
+    return true;
+  } catch(e) {
+    console.error('Supabase 로드 오류:', e);
+    showSyncStatus('⚠️ 오프라인 모드');
+    return false;
+  }
+}
+
+// Supabase에 저장
+async function syncToSupabase() {
+  if (!currentUser) return;
+  try {
+    // 새 예약(sm_ 아닌 것)만 저장
+    const newBks = bookings.filter(b => !b.smmate);
+    if (newBks.length > 0) {
+      await supa.from('schedules').upsert(
+        newBks.map(b => ({
+          smmate_id: null,
+          schedule_type: ' 촬영',
+          schedule_date: b.date,
+          schedule_time: b.time,
+          customer_name: b.name,
+          phone: b.phone || '',
+          memo: b.memo || '',
+          title: b.name,
+          status: b.cancelled ? '취소' : '예약',
+        }))
+      );
+    }
+    showSyncStatus('✅ 저장됨');
+  } catch(e) {
+    showSyncStatus('⚠️ 저장 실패');
+  }
+}
 
 function getAllData() {
   return {
@@ -1655,55 +1885,13 @@ function applyAllData(d) {
 }
 
 async function syncToSheet() {
-  try {
-    const res = await fetch(GAS_URL, {
-      method: 'POST', mode: 'no-cors',
-      headers: {'Content-Type': 'text/plain'},
-      body: JSON.stringify({action:'save', payload: getAllData()})
-    });
-    showSyncStatus('✅ 저장됨');
-  } catch(e) {
-    showSyncStatus('⚠️ 오프라인');
-  }
+  // Supabase로 교체됨 — scheduleSyncToSupabase() 사용
+  return syncToSupabase();
 }
 
 async function loadFromSheet() {
-  return new Promise((resolve) => {
-    showSyncStatus('🔄 불러오는 중...');
-
-    const timeout = setTimeout(() => {
-      window.removeEventListener('message', handler);
-      showSyncStatus('⚠️ 오프라인 모드');
-      resolve(false);
-    }, 20000);
-
-    function handler(event) {
-      if (!event.data || event.data.type !== 'GAS_LOAD_RESULT') return;
-      clearTimeout(timeout);
-      window.removeEventListener('message', handler);
-      const json = event.data.payload;
-      if (json && json.ok && json.payload) {
-        const d = typeof json.payload === 'string' ? JSON.parse(json.payload) : json.payload;
-        applyAllData(d);
-        showSyncStatus('✅ 최신 데이터');
-        resolve(true);
-      } else {
-        showSyncStatus('✅ 연결됨');
-        resolve(false);
-      }
-    }
-
-    window.addEventListener('message', handler);
-
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.src = GAS_URL + '?action=loadFrame&origin=' + encodeURIComponent(location.origin);
-    document.body.appendChild(iframe);
-
-    setTimeout(() => {
-      try { document.body.removeChild(iframe); } catch(e) {}
-    }, 25000);
-  });
+  // Supabase로 교체됨
+  return loadFromSupabase();
 }
 
 function showSyncStatus(msg) {
@@ -1711,16 +1899,16 @@ function showSyncStatus(msg) {
   if (el) { el.textContent = msg; }
 }
 
-function scheduleSyncToSheet() {
+function scheduleSyncToSupabase() {
   clearTimeout(syncTimer);
-  syncTimer = setTimeout(syncToSheet, 2000);
+  syncTimer = setTimeout(syncToSupabase, 2000);
 }
 // ===== 구글 시트 연동 끝 =====
 
-function saveBookings() { scheduleSyncToSheet(); }
-function saveCustomers() { scheduleSyncToSheet(); }
+function saveBookings() { scheduleSyncToSupabase(); }
+function saveCustomers() { scheduleSyncToSupabase(); }
 function saveDateMemos() { localStorage.setItem('gamtan_date_memos', JSON.stringify(dateMemos)); }
-function saveCustMemos() { scheduleSyncToSheet(); }
+function saveCustMemos() { scheduleSyncToSupabase(); }
 function saveCustProfiles() { localStorage.setItem('gamtan_cust_profiles', JSON.stringify(custProfiles)); }
 function setCustProfile(name, field, val) {
   if(!custProfiles[name]) custProfiles[name] = {};
@@ -7650,9 +7838,15 @@ function importData(e) {
 
 <script>
 // 앱 시작 시 구글 시트에서 최신 데이터 불러오기
+
+// 세션 체크 — 기존 세션 있으면 자동 로그인, 없으면 로그인 화면 표시
 window.addEventListener('load', async function() {
-  const loaded = await loadFromSheet();
-  if (loaded) {
+  const { data: { session } } = await supa.auth.getSession();
+  if (session) {
+    await onLoginSuccess(session.user);
+  }
+  // 로그인 안 된 경우 login-screen이 이미 표시 중
+  if (false) {
     // 데이터 새로 불러왔으면 현재 뷰에 맞게만 갱신 (무조건 month로 돌리지 않음)
     if (typeof currentView === 'undefined' || currentView === 'month') {
       if (typeof renderMonthCal === 'function') renderMonthCal();
