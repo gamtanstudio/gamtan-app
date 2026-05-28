@@ -5476,7 +5476,7 @@ function renderMonthCal() {
   mc.innerHTML = `
     <div class="mc-nav">
       <button class="mc-nav-btn" onclick="mcPrevMonth()">‹</button>
-      <div class="mc-title">${monthLabel}</div>
+      <div class="mc-title" onclick="openYearPicker()" style="cursor:pointer;user-select:none" title="클릭하여 년도/월 선택">${monthLabel} ▾</div>
       <button class="mc-nav-btn" onclick="mcNextMonth()">›</button>
       <button class="mc-today-btn" onclick="mcGoToday()">오늘</button>
       <div style="flex:1"></div>
@@ -5509,6 +5509,63 @@ function mcNextMonth() {
 }
 function mcGoToday() {
   const t = new Date(); mcYear = t.getFullYear(); mcMonth = t.getMonth();
+  renderMonthCal();
+}
+
+function openYearPicker() {
+  const existing = document.getElementById('year-picker-popup');
+  if(existing) { existing.remove(); return; }
+
+  const curY = mcYear, curM = mcMonth;
+  const startY = 2015, endY = new Date().getFullYear() + 2;
+  const months = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+
+  const popup = document.createElement('div');
+  popup.id = 'year-picker-popup';
+  popup.style.cssText = 'position:fixed;top:56px;left:50%;transform:translateX(-50%);background:#1a1a2e;border:1px solid rgba(255,255,255,.2);border-radius:12px;padding:16px;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,.4);min-width:280px';
+
+  // 년도 선택
+  let yearsHtml = '';
+  for(let y = endY; y >= startY; y--) {
+    const active = y === curY;
+    yearsHtml += `<button onclick="mcPickYear(${y})" style="padding:6px 12px;border-radius:6px;border:none;cursor:pointer;font-size:13px;font-weight:${active?'800':'400'};background:${active?'#6366f1':'rgba(255,255,255,.1)'};color:#fff;margin:2px">${y}년</button>`;
+  }
+
+  // 월 선택
+  let monthsHtml = '';
+  months.forEach((mn, i) => {
+    const active = i === curM;
+    monthsHtml += `<button onclick="mcPickMonth(${i})" style="padding:6px 10px;border-radius:6px;border:none;cursor:pointer;font-size:13px;font-weight:${active?'800':'400'};background:${active?'#6366f1':'rgba(255,255,255,.1)'};color:#fff;margin:2px;min-width:44px">${mn}</button>`;
+  });
+
+  popup.innerHTML = `
+    <div style="color:rgba(255,255,255,.6);font-size:11px;margin-bottom:8px">년도</div>
+    <div style="display:flex;flex-wrap:wrap;gap:2px;margin-bottom:12px;max-height:120px;overflow-y:auto">${yearsHtml}</div>
+    <div style="color:rgba(255,255,255,.6);font-size:11px;margin-bottom:8px">월</div>
+    <div style="display:flex;flex-wrap:wrap;gap:2px">${monthsHtml}</div>
+  `;
+
+  document.body.appendChild(popup);
+
+  // 바깥 클릭 시 닫기
+  setTimeout(() => {
+    document.addEventListener('click', function _close(e) {
+      if(!popup.contains(e.target)) { popup.remove(); document.removeEventListener('click', _close); }
+    });
+  }, 50);
+}
+
+function mcPickYear(y) {
+  mcYear = y;
+  const p = document.getElementById('year-picker-popup');
+  if(p) p.remove();
+  renderMonthCal();
+}
+
+function mcPickMonth(m) {
+  mcMonth = m;
+  const p = document.getElementById('year-picker-popup');
+  if(p) p.remove();
   renderMonthCal();
 }
 
