@@ -1653,16 +1653,31 @@ async function doLogin() {
 
 async function onLoginSuccess(user) {
   currentUser = user;
-  // 권한 확인
   const { data: roleData } = await supa.from('user_roles').select('role').eq('user_id', user.id).single();
   userRole = roleData?.role || 'staff';
-  // 매출 관련 UI 권한 적용
   applyRoleUI();
-  // 로그인 화면 숨기기
   document.getElementById('login-screen').style.display = 'none';
-  // 데이터 로드
-  showSyncStatus('🔄 불러오는 중...');
-  await loadFromSupabase();
+
+  // ★ 1단계: 캐시된 SM메이트 데이터로 즉시 화면 표시
+  const cachedSm = localStorage.getItem('gamtan_smmate_bookings');
+  if (cachedSm) {
+    try {
+      const smParsed = JSON.parse(cachedSm);
+      const localBks = JSON.parse(localStorage.getItem('gamtan_bookings')||'[]');
+      const localOnly = localBks.filter(b => !b.smmate);
+      bookings = [...smParsed, ...localOnly];
+      showSyncStatus('⚡ 캐시 로드 (업데이트 중...)');
+      if (typeof renderMonthCal === 'function') renderMonthCal();
+      if (typeof renderList === 'function') renderList();
+    } catch(e) {
+      showSyncStatus('🔄 불러오는 중...');
+    }
+  } else {
+    showSyncStatus('🔄 불러오는 중...');
+  }
+
+  // ★ 2단계: 백그라운드에서 Supabase 최신 데이터 갱신 (await 없이)
+  loadFromSupabase();
 }
 
 function applyRoleUI() {
@@ -1765,6 +1780,8 @@ async function loadFromSupabase() {
       const localOnly = localBks.filter(b => !b.smmate);
       bookings = [...imported, ...localOnly];
       localStorage.setItem('gamtan_bookings', JSON.stringify(bookings));
+      // ★ SM메이트 데이터 별도 캐시 저장 (다음 로그인 시 즉시 표시용)
+      try { localStorage.setItem('gamtan_smmate_bookings', JSON.stringify(imported)); } catch(e) {}
     }
 
     // 고객 정보 처리
