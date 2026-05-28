@@ -2834,7 +2834,8 @@ function renderCustomerDrop(filter) {
   const inner = document.getElementById('customer-drop-inner');
   const empty = document.getElementById('customer-drop-empty');
   if(!inner) return;
-  const filtered = filter ? customers.filter(c=>c.includes(filter)) : customers;
+  if(!filter || !filter.trim()) { inner.innerHTML=''; empty.style.display='none'; return; }
+  const filtered = customers.filter(c=>c.includes(filter)).slice(0,50);
   if(!filtered.length) {
     inner.innerHTML=''; empty.style.display='block'; return;
   }
@@ -4941,7 +4942,7 @@ function openAddModal() {
   document.getElementById('f-date').disabled=false;
   document.getElementById('btn-delete-booking').style.display='none';
   onProductChange();
-  updateCustomerChips();
+  // 모달 열 때 전체 고객 렌더 안 함 — 타이핑 시 렌더 (성능 개선)
   document.getElementById('add-modal').classList.add('open');
   document.getElementById('f-name').focus();
 }
