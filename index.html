@@ -1697,32 +1697,51 @@ async function loadFromSupabase() {
   try {
     showSyncStatus('🔄 불러오는 중...');
 
-    // 스케줄(촬영) 불러오기 — 페이지네이션 (최대 10000건)
-    let allSched = [];
-    let from = 0;
     const PAGE = 1000;
-    while (true) {
-      const { data, error } = await supa.from('schedules')
-        .select('new_id,smmate_id,schedule_date,schedule_time,customer_name,phone,customer_no,title,memo,status')
-        .ilike('schedule_type', '%촬영%')
-        .order('schedule_date', { ascending: false })
-        .range(from, from + PAGE - 1);
-      if (error || !data || data.length === 0) break;
-      allSched = allSched.concat(data);
-      if (data.length < PAGE) break;
-      from += PAGE;
+
+    // 페이지네이션 헬퍼
+    async function fetchAll(builder) {
+      let results = [];
+      let from = 0;
+      while (true) {
+        const { data, error } = await builder(from, from + PAGE - 1);
+        if (error || !data || data.length === 0) break;
+        results = results.concat(data);
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+      return results;
     }
 
+    // ★ 3개 테이블 병렬 로딩
+    const [allSched, allCust, allContracts] = await Promise.all([
+      fetchAll((from, to) =>
+        supa.from('schedules')
+          .select('new_id,smmate_id,schedule_date,schedule_time,customer_name,phone,customer_no,title,memo,status')
+          .ilike('schedule_type', '%촬영%')
+          .order('schedule_date', { ascending: false })
+          .range(from, to)
+      ),
+      fetchAll((from, to) =>
+        supa.from('customers')
+          .select('id,baby_name,mom_name,dad_name,mom_phone,dad_phone,customer_no,memo,total_amount,deposit,last_visit')
+          .order('id')
+          .range(from, to)
+      ),
+      fetchAll((from, to) =>
+        supa.from('contracts')
+          .select('smmate_id,customer_name,total_amount,deposit,middle_payment,contract_date,contract_no')
+          .range(from, to)
+      ),
+    ]);
+
+    // 스케줄 처리
     if (allSched.length > 0) {
       const imported = allSched.map(s => {
-        // 날짜: '2026/05/21' 또는 ' 2026/05/21' → '2026-05-21'
         const rawDate = (s.schedule_date || '').trim();
         const date = rawDate.replace(/\//g, '-');
-        // 시간: ' 11:00' → '11:00'
         const time = (s.schedule_time || '').trim();
-        // 고객명
         const name = (s.customer_name || '').trim();
-        // 상품 코드
         const product = smTitleToProduct(s.title);
         return {
           id: 'sm_' + s.new_id,
@@ -1737,55 +1756,36 @@ async function loadFromSupabase() {
           customer_no: (s.customer_no || '').trim(),
           status: s.status,
           adults: 2, kids: 0,
-          visitNote: (s.memo || '').trim(),  // 스케줄 메모 → 히스토리 오른쪽 위 메모
-          memo: '',  // 노란 메모란은 비움 (visitNote로 이동)
+          visitNote: (s.memo || '').trim(),
+          memo: '',
         };
       }).filter(b => b.name && b.date);
 
-      // localStorage 기존 신규예약(sm_ 아닌 것)과 합치기
       const localBks = JSON.parse(localStorage.getItem('gamtan_bookings')||'[]');
       const localOnly = localBks.filter(b => !b.smmate);
       bookings = [...imported, ...localOnly];
       localStorage.setItem('gamtan_bookings', JSON.stringify(bookings));
     }
 
-    // 고객 정보 불러오기 — 페이지네이션
-    let allCust = [];
-    from = 0;
-    while (true) {
-      const { data, error } = await supa.from('customers')
-        .select('id,baby_name,mom_name,dad_name,mom_phone,dad_phone,customer_no,memo,total_amount,deposit,last_visit')
-        .order('id')
-        .range(from, from + PAGE - 1);
-      if (error || !data || data.length === 0) break;
-      allCust = allCust.concat(data);
-      if (data.length < PAGE) break;
-      from += PAGE;
-    }
-
+    // 고객 정보 처리
     if (allCust.length > 0) {
       allCust.forEach(c => {
         const name = (c.baby_name || c.mom_name || '').trim();
         if (!name) return;
-        // custProfiles에 SM메이트 상세 정보 저장 (customers 배열과 분리)
         if (!custProfiles[name]) custProfiles[name] = {};
         custProfiles[name].smmate_id = c.id;
         custProfiles[name].customer_no = c.customer_no;
         custProfiles[name].mom_phone = c.mom_phone || c.dad_phone;
         custProfiles[name].last_visit = c.last_visit;
-        // 상담메모: SM메이트 고객 메모 → 앱 상담메모(custMemos)
         if (c.memo && c.memo.trim()) {
           const memoText = c.memo.trim().substring(0, 500);
           if (!custMemos[name]) custMemos[name] = memoText;
         }
-        // ★ 고객번호 매핑: SM메이트 No(c.id)를 그대로 사용 (항상 20000 미만)
         if (c.id && c.id > 0 && c.id < 20000) {
           custNumbers[name] = c.id;
         }
-        // customers 배열에 이름 추가 (없으면)
         if (!customers.includes(name)) customers.push(name);
       });
-      // customers는 용량이 크므로 메모리에만 유지, custNumbers와 custMemos만 저장
       try {
         localStorage.setItem('gamtan_cust_numbers', JSON.stringify(custNumbers));
         localStorage.setItem('gamtan_cust_memos', JSON.stringify(custMemos));
@@ -1796,21 +1796,8 @@ async function loadFromSupabase() {
 
     // 방문기록은 고객 상세 열 때 Supabase에서 직접 불러옴 (지연 로딩)
 
-    // 계약 데이터 불러오기 → payments 매핑 (smmate_id 기준)
-    let allContracts = [];
-    from = 0;
-    while (true) {
-      const { data, error } = await supa.from('contracts')
-        .select('smmate_id,customer_name,total_amount,deposit,middle_payment,contract_date,contract_no')
-        .range(from, from + PAGE - 1);
-      if (error || !data || data.length === 0) break;
-      allContracts = allContracts.concat(data);
-      if (data.length < PAGE) break;
-      from += PAGE;
-    }
+    // 계약 처리
     if (allContracts.length > 0) {
-      // smmate_id + contract_date 기준으로 계약 맵 생성
-      // 구조: contractMap[smmate_id] = [{ date, total, deposit, mid }, ...]
       const contractMap = {};
       allContracts.forEach(c => {
         const sid = c.smmate_id;
@@ -1824,26 +1811,22 @@ async function loadFromSupabase() {
           contract_no: (c.contract_no || '').trim(),
         });
       });
-      // customers의 smmate_id로 고객명 → smmate_id 역매핑
       const nameToSmmateId = {};
       allCust.forEach(c => {
         const name = (c.baby_name || c.mom_name || '').trim();
         if (name && c.id) nameToSmmateId[name] = c.id;
       });
-      // bookings에 payments 매핑 — 촬영일과 가장 가까운 계약일 매칭
       bookings = bookings.map(b => {
         if (!b.smmate) return b;
         const name = (b.name || '').trim();
         const sid = nameToSmmateId[name];
         const contracts = sid ? contractMap[sid] : null;
         if (!contracts || contracts.length === 0) return b;
-        // 촬영일과 가장 가까운 계약 찾기 (촬영일 이전 또는 같은 날 중 가장 최근)
         const bookDate = (b.date || '').trim();
         let matched = null;
         if (contracts.length === 1) {
           matched = contracts[0];
         } else {
-          // 계약일이 촬영일 이전인 것 중 가장 가까운 것
           const sorted = contracts
             .filter(c => c.date && c.date <= bookDate)
             .sort((a, b) => b.date.localeCompare(a.date));
