@@ -1866,8 +1866,15 @@ async function loadFromSupabase() {
     }
 
     showSyncStatus('✅ 최신 데이터 (' + allSched.length + '건)');
-    if (typeof renderMonthCal === 'function') renderMonthCal();
-    if (typeof renderList === 'function') renderList();
+    // 모달 열려있으면 렌더 지연 — 모달 닫힐 때 자동 갱신됨
+    const modalOpen = document.getElementById('add-modal')?.classList.contains('open')
+      || document.getElementById('wf-modal')?.classList.contains('open');
+    if (!modalOpen) {
+      if (typeof renderMonthCal === 'function') renderMonthCal();
+      if (typeof renderList === 'function') renderList();
+    } else {
+      window._pendingRender = true;
+    }
     return true;
   } catch(e) {
     console.error('Supabase 로드 오류:', e);
@@ -5014,6 +5021,12 @@ function closeAddModal() {
     const b = bookings.find(x=>x.id===_editFromWfModalBid);
     _editFromWfModalBid = '';
     if(b) openWfModal(b);
+  }
+  // 백그라운드 업데이트 완료 후 대기 중이던 렌더 실행
+  if(window._pendingRender) {
+    window._pendingRender = false;
+    if(typeof renderMonthCal === 'function') renderMonthCal();
+    if(typeof renderList === 'function') renderList();
   }
 }
 
