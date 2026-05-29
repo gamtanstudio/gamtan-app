@@ -6034,29 +6034,28 @@ function saveAligoSettings() {
   setTimeout(()=>{ el.textContent=''; closeAligoSettings(); }, 1200);
 }
 
-// 잔액 확인
+// 잔액 확인 (Supabase Edge Function 경유 — 키는 서버에 저장됨)
 async function testAligoBalance() {
-  const s = loadAligoSettings();
-  if(!s.userId || !s.apiKey) { alert('먼저 계정 ID와 API Key를 입력해 주세요.'); return; }
   const el = document.getElementById('aligo-test-result');
   el.style.color = '#888';
   el.textContent = '잔액 확인 중...';
   try {
-    const fd = new FormData();
-    fd.append('key', s.apiKey);
-    fd.append('user_id', s.userId);
-    const res = await fetch('https://apis.aligo.in/remain/', { method:'POST', body:fd });
+    const res = await fetch(`${SUPA_URL}/functions/v1/send-sms`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${SUPA_KEY}` },
+      body: JSON.stringify({ action:'balance' })
+    });
     const data = await res.json();
-    if(data.result_code === '1') {
+    if(data.result_code == 1) {
       el.style.color = '#0369a1';
       el.textContent = `💰 잔여 건수: SMS ${data.SMS_CNT}건 / LMS ${data.LMS_CNT}건`;
     } else {
       el.style.color = '#dc2626';
-      el.textContent = `오류: ${data.message}`;
+      el.textContent = `오류: ${data.message || data.error || JSON.stringify(data)}`;
     }
   } catch(e) {
     el.style.color = '#dc2626';
-    el.textContent = `연결 오류: CORS 차단 가능성 있음 (알리고 웹에서 직접 확인 필요)`;
+    el.textContent = `연결 오류: ${e.message}`;
   }
 }
 
@@ -6085,16 +6084,8 @@ function updateAligoMsgInfo() {
   el.innerHTML = `<span style="color:${col};font-weight:600">${type}</span> · ${bytes}바이트`;
 }
 
-// 실제 발송
+// 실제 발송 (Supabase Edge Function 경유 — 키/발신번호는 서버에 저장됨)
 async function aligoSend() {
-  const s = loadAligoSettings();
-  if(!s.userId || !s.apiKey || !s.sender) {
-    if(confirm('알리고 설정이 없습니다. 지금 설정하시겠어요?')) {
-      closeAligoSend();
-      openAligoSettings();
-    }
-    return;
-  }
   const receiver = document.getElementById('aligo-recv').value.trim();
   const msg      = document.getElementById('aligo-msg').value.trim();
   if(!receiver) { alert('수신번호를 입력해 주세요.'); return; }
@@ -6108,33 +6099,30 @@ async function aligoSend() {
   resEl.textContent = '발송 요청 중...';
 
   try {
-    const txt = document.getElementById('aligo-msg').value;
-    const bytes = [...txt].reduce((n,c)=>n+(c.charCodeAt(0)>127?2:1),0);
-    const fd = new FormData();
-    fd.append('key',      s.apiKey);
-    fd.append('user_id',  s.userId);
-    fd.append('sender',   s.sender.replace(/-/g,''));
-    fd.append('receiver', receiver.replace(/-/g,''));
-    fd.append('msg',      msg);
-    if(bytes > 90) fd.append('msg_type', 'LMS');
-    const res = await fetch('https://apis.aligo.in/send/', { method:'POST', body:fd });
+    const res = await fetch(`${SUPA_URL}/functions/v1/send-sms`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${SUPA_KEY}` },
+      body: JSON.stringify({
+        receiver: receiver.replace(/-/g,''),
+        msg:      msg,
+        title:    '감탄사진관'   // LMS일 때만 제목으로 들어감, SMS면 무시됨
+      })
+    });
     const data = await res.json();
-    if(data.result_code === '1') {
+    if(data.result_code == 1) {
       resEl.style.color = '#16a34a';
-      resEl.textContent = `✅ 발송 완료! (${data.msg_type}, 잔여 ${data.SMS_CNT||data.LMS_CNT}건)`;
+      resEl.textContent = `✅ 발송 완료! (${data.msg_type||''} 잔여 ${data.SMS_CNT||data.LMS_CNT||''}건)`;
       btn.textContent = '발송 완료';
       setTimeout(()=>closeAligoSend(), 1800);
     } else {
       resEl.style.color = '#dc2626';
-      resEl.textContent = `발송 실패: ${data.message}`;
+      resEl.textContent = `발송 실패: ${data.message || data.error || JSON.stringify(data)}`;
       btn.disabled = false;
       btn.textContent = '다시 시도';
     }
   } catch(e) {
-    // CORS 차단 시 fallback 안내
-    resEl.style.color = '#b45309';
-    resEl.innerHTML = `⚠️ 직접 발송 불가 (CORS 차단)<br>
-      <a href="https://sms.aligo.in" target="_blank" style="color:#6366f1;font-weight:600">알리고 웹에서 직접 발송 →</a>`;
+    resEl.style.color = '#dc2626';
+    resEl.textContent = `연결 오류: ${e.message}`;
     btn.disabled = false;
     btn.textContent = '다시 시도';
   }
