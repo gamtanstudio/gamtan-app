@@ -1778,19 +1778,17 @@ async function loadFromSupabase() {
 
       const localBks = JSON.parse(localStorage.getItem('gamtan_bookings')||'[]');
       const localOnly = localBks.filter(b => !b.smmate);
-      // ★ override 정보 병합: smmate_price_override된 예약의 수정 내용 보존
+      // ★ 금액 수정(override)된 SM 예약 보존: Supabase 원본이 덮어쓰지 않도록 병합
       const cachedSmBks = JSON.parse(localStorage.getItem('gamtan_smmate_bookings')||'[]');
       const overrideMap = {};
-      cachedSmBks.forEach(b => {
-        if(b.smmate_price_override) overrideMap[b.id] = b;
-      });
+      cachedSmBks.forEach(b => { if(b.smmate_price_override) overrideMap[b.id] = b; });
       const mergedImported = imported.map(b => {
-        if(overrideMap[b.id]) {
-          // Supabase 기본 필드 유지 + override 필드 덮어쓰기
+        const ov = overrideMap[b.id];
+        if(ov) {
           return Object.assign({}, b, {
             smmate_price_override: true,
-            priceItems: overrideMap[b.id].priceItems,
-            payments: overrideMap[b.id].payments,
+            priceItems: ov.priceItems,
+            payments: ov.payments,
           });
         }
         return b;
@@ -1972,6 +1970,7 @@ function saveBookings() {
   // 신규 예약(sm_ 아닌 것)만 Supabase에 저장
   scheduleSyncToSupabase();
   try { localStorage.setItem('gamtan_bookings', JSON.stringify(bookings.filter(b=>!b.smmate))); } catch(e) {}
+  // ★ 금액 수정(override)된 SM 예약 보존용 캐시
   try { localStorage.setItem('gamtan_smmate_bookings', JSON.stringify(bookings.filter(b=>b.smmate))); } catch(e) {}
 }
 function saveCustomers() { scheduleSyncToSupabase(); }
@@ -2432,23 +2431,22 @@ function editDepositMethod(bid, val) {
 function smmatePriceOverride(bid) {
   const b = bookings.find(x=>x.id===bid);
   if(!b) return;
-  b.smmate_price_override = true;
-  // SM payments → priceItems + payments 구조로 마이그레이션
-  const smTotal = b.payments?.total || 0;
-  const smDep   = b.payments?.deposit?.amt || 0;
+  // SM 원본 금액 보존
+  const smTotal     = Number(b.payments?.total) || 0;
+  const smDep       = Number(b.payments?.deposit?.amt) || 0;
   const smDepMethod = b.payments?.deposit?.method || '계좌이체';
-  const smMids  = b.payments?.midterms || [];
-  if(!b.priceItems || b.priceItems.length === 0) {
-    b.priceItems = [{
-      id: Date.now(),
-      name: 'SM메이트 촬영',
-      qty: 1,
-      price: smTotal
-    }];
-  }
+  const smMids      = (b.payments?.midterms || []).map(m=>({
+    id: m.id || Date.now(),
+    amt: Number(m.amt) || 0,
+    method: m.method || '계좌이체'
+  }));
+  b.smmate_price_override = true;
+  // priceItems 구조에 맞춰 생성 ({id, label, amt, deletable})
+  b.priceItems = [{ id: 1, label: 'SM메이트 촬영', amt: smTotal, deletable: true }];
+  // payments에서 SM 전용 total 필드 제거 → 일반 결제 구조로
   b.payments = {
-    deposit:  { amt: smDep, method: smDepMethod, date: '' },
-    midterms: smMids.length > 0 ? smMids : []
+    deposit:  { amt: smDep, method: smDepMethod },
+    midterms: smMids
   };
   saveBookings();
   // 고객 상세 전체 리렌더
