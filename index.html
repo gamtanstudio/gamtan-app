@@ -461,6 +461,129 @@ let userRole = 'staff';
 .login-btn:hover{background:#2d2d4e}
 .login-err{color:#ef4444;font-size:13px;margin-top:8px;min-height:20px}
 .login-loading{color:#6366f1;font-size:13px;margin-top:8px}
+
+/* ===== 감탄 견적 콘솔 — 껍데기 ===== */
+#gc-dim{position:fixed;inset:0;background:rgba(10,12,16,.4);z-index:9998;opacity:0;
+  pointer-events:none;transition:opacity .2s}
+#gc-dim.on{opacity:1;pointer-events:auto}
+#gc-wrap{position:fixed;top:0;right:0;bottom:0;width:min(560px,96vw);z-index:9999;
+  transform:translateX(103%);transition:transform .26s cubic-bezier(.4,0,.2,1);
+  box-shadow:-8px 0 40px rgba(10,12,16,.18)}
+#gc-wrap.on{transform:translateX(0)}
+#gc-root{height:100%;display:flex;flex-direction:column;background:#f5f6f8;
+  font-family:'Pretendard',system-ui,-apple-system,sans-serif;
+  color:#14181f;line-height:1.55;letter-spacing:-.011em;text-align:left}
+#gc-root *{box-sizing:border-box;margin:0;padding:0}
+#gc-root button,#gc-root input,#gc-root select{font-family:inherit}
+#gc-head{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:13px 16px;background:#fff;border-bottom:1px solid #e3e6ec;flex:none}
+#gc-head b{font-size:15px;font-weight:800}
+#gc-close{width:32px;height:32px;border:1px solid #e3e6ec;border-radius:9px;background:#fff;
+  font-size:14px;color:#8b93a3;cursor:pointer;line-height:1;flex:none}
+#gc-close:hover{background:#f0f2f6;color:#14181f}
+#gc-body{flex:1;overflow-y:auto;padding:14px;-webkit-overflow-scrolling:touch}
+@media(max-width:640px){#gc-wrap{width:100vw}}
+
+#gc-root{
+  --gc-ink:#14181f; --gc-ink2:#4a5261; --gc-ink3:#8b93a3;
+  --gc-line:#e3e6ec; --gc-line2:#f0f2f6;
+  --gc-paper:#f5f6f8; --gc-card:#fff;
+  --gc-accent:#4f46e5; --gc-accent-soft:#eef0ff;
+  --gc-warn:#b45309; --gc-warn-bg:#fff8ea;
+  --gc-ok:#059669;
+  --gc-danger:#be123c; --gc-danger-bg:#fff1f3;
+  --gc-sh:0 1px 2px rgba(20,24,31,.04),0 6px 20px rgba(20,24,31,.06);
+  --gc-r:14px;
+}
+#gc-root *{box-sizing:border-box;margin:0;padding:0}
+
+
+#gc-root button,#gc-root input,#gc-root select,#gc-root textarea{font-family:inherit}
+@media(prefers-reduced-motion:reduce){#gc-root *{transition:none!important;animation:none!important}}
+#gc-root /* ===== 상품 타일 ===== */
+.prods{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:16px}
+@media(min-width:520px){#gc-root .prods{grid-template-columns:repeat(4,1fr)}}
+#gc-root .prod{position:relative;border:1.5px solid var(--gc-line);background:#fff;border-radius:11px;
+  padding:11px 9px 10px 13px;cursor:pointer;text-align:left;transition:.15s;overflow:hidden}
+#gc-root .prod::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3.5px;background:var(--pc);opacity:.32;transition:opacity .15s}
+#gc-root .prod b{display:block;font-size:12.8px;font-weight:800;line-height:1.25}
+#gc-root .prod span{display:block;font-size:10.5px;color:var(--gc-ink3);margin-top:3px}
+#gc-root .prod.on{border-color:var(--pc);background:var(--pbg)}
+#gc-root .prod.on::before{opacity:1}
+#gc-root .prod.on b{color:var(--pc)}
+#gc-root .prod:focus-visible{outline:2px solid var(--gc-accent);outline-offset:2px}
+#gc-root /* ===== 스테퍼 / 토글 ===== */
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--gc-line2)}
+#gc-root .rl{min-width:0}
+#gc-root .rl b{word-break:keep-all}
+#gc-root .row:first-child{border-top:0}
+#gc-root .rl b{font-size:13.8px;font-weight:700}
+#gc-root .rl span{display:block;font-size:11.3px;color:var(--gc-ink3);margin-top:1px}
+#gc-root .stp{display:flex;align-items:center;border:1px solid var(--gc-line);border-radius:10px;overflow:hidden;flex:none}
+#gc-root .stp button{width:36px;height:36px;border:0;background:#fff;font-size:19px;color:var(--gc-ink);cursor:pointer;line-height:1;transition:.12s}
+#gc-root .stp button:hover:not(:disabled){background:var(--gc-accent-soft);color:var(--gc-accent)}
+#gc-root .stp button:disabled{color:#cfd4dd;cursor:not-allowed}
+#gc-root .stp .v{min-width:38px;text-align:center;font-size:14.5px;font-weight:800;font-variant-numeric:tabular-nums}
+#gc-root .sw{position:relative;width:44px;height:26px;flex:none}
+#gc-root .sw input{opacity:0;width:0;height:0}
+#gc-root .sl{position:absolute;inset:0;background:#dde1e9;border-radius:99px;cursor:pointer;transition:.18s}
+#gc-root .sl::before{content:"";position:absolute;width:20px;height:20px;left:3px;top:3px;background:#fff;
+  border-radius:50%;transition:.18s;box-shadow:0 1px 3px rgba(0,0,0,.18)}
+#gc-root .sw input:checked+.sl{background:var(--gc-accent)}
+#gc-root .sw input:checked+.sl::before{transform:translateX(18px)}
+#gc-root .sw input:focus-visible+.sl{box-shadow:0 0 0 3px var(--gc-accent-soft)}
+#gc-root .seg{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px}
+#gc-root .seg button{border:1.5px solid var(--gc-line);background:#fff;border-radius:9px;padding:7px 11px;
+  font-size:12.5px;font-weight:700;color:var(--gc-ink2);cursor:pointer;transition:.15s}
+#gc-root .seg button.on{border-color:var(--gc-accent);background:var(--gc-accent-soft);color:var(--gc-accent)}
+#gc-root /* ===== 견적 ===== */
+.rightcol{display:flex;flex-direction:column;gap:14px;min-width:0}
+@media(min-width:1100px){#gc-root .rightcol{position:sticky;top:78px}}
+#gc-root .quote{border:1px solid var(--gc-line);border-radius:13px;overflow:hidden;min-width:0}
+#gc-root .qh{background:var(--gc-accent-soft);padding:13px 16px;transition:background .25s}
+#gc-root .qh .lb{font-size:11.5px;font-weight:700;color:var(--gc-ink2)}
+#gc-root .qh .tt{font-size:clamp(21px,4.4vw,27px);font-weight:800;color:var(--gc-accent);letter-spacing:-.035em;
+  font-variant-numeric:tabular-nums;transition:color .25s;line-height:1.15;margin-top:1px;
+  overflow-wrap:anywhere}
+#gc-root .qh .tt em{font-style:normal;font-size:15px;font-weight:700}
+#gc-root .ql{padding:5px 16px 12px}
+#gc-root .qr{display:flex;justify-content:space-between;gap:10px;align-items:baseline;padding:6px 0;
+  font-size:13px;border-top:1px dashed var(--gc-line2);min-width:0}
+#gc-root .qr .a{min-width:0;word-break:keep-all}
+#gc-root .qr:first-child{border-top:0}
+#gc-root .qr .a{color:var(--gc-ink2)}
+#gc-root .qr .a.p{color:var(--gc-ink)}
+#gc-root .qr .b{font-weight:700;font-variant-numeric:tabular-nums;flex:none}
+#gc-root .chips{display:flex;gap:6px;flex-wrap:wrap;padding:2px 16px 14px}
+#gc-root .chip{font-size:10.8px;font-weight:700;background:var(--gc-line2);color:var(--gc-ink2);padding:4px 8px;border-radius:6px}
+#gc-root .chip.w{background:var(--gc-warn-bg);color:var(--gc-warn)}
+#gc-root .chip.d{background:var(--gc-danger-bg);color:var(--gc-danger)}
+#gc-root .dep{padding:10px 16px;background:var(--gc-warn-bg);border-top:1px solid var(--gc-line);
+  font-size:12.2px;color:var(--gc-warn);font-weight:700;line-height:1.5;word-break:keep-all}
+#gc-root /* ===== 비교 ===== */
+.cmp{border:1px solid var(--gc-line);border-radius:13px;overflow:hidden;min-width:0}
+#gc-root .cmp:empty{display:none}
+#gc-root .cmp-h{padding:11px 15px;background:#fafbfc;border-bottom:1px solid var(--gc-line2);
+  font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:space-between;gap:8px}
+#gc-root .cmp-h .hint{font-size:11px;font-weight:600;color:var(--gc-ink3)}
+#gc-root .cmp-r{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px 10px;align-items:center;
+  padding:11px 15px;border-top:1px solid var(--gc-line2);cursor:pointer;transition:background .12s;
+  border-left:3px solid transparent;width:100%;text-align:left;background:none;border-right:0;border-bottom:0}
+@media(max-width:400px){}
+#gc-root .cmp-r .d{grid-column:2;text-align:right}
+}
+#gc-root .cmp-r:hover{background:#fafbfc}
+#gc-root .cmp-r.cur{border-left-color:var(--gc-accent);background:var(--gc-accent-soft)}
+#gc-root .cmp-r .n{min-width:0}
+#gc-root .cmp-r .n b{font-size:13.2px;font-weight:800;display:block}
+#gc-root .cmp-r .n span{display:block;font-size:11px;color:var(--gc-ink3);line-height:1.35;word-break:keep-all}
+#gc-root .cmp-r .t{font-size:14.5px;font-weight:800;font-variant-numeric:tabular-nums;text-align:right}
+#gc-root .cmp-r .d{font-size:11.5px;font-weight:700;font-variant-numeric:tabular-nums;min-width:66px;text-align:right}
+#gc-root .cmp-r .d.up{color:var(--gc-danger)}
+#gc-root .cmp-r .d.dn{color:var(--gc-ok)}
+#gc-root .cmp-r .d.eq{color:var(--gc-ink3)}
+#gc-root .cmp-note{padding:11px 15px;background:var(--gc-warn-bg);border-top:1px solid var(--gc-line);
+  font-size:11.8px;color:var(--gc-warn);line-height:1.6}
 </style>
 </head>
 <body>
@@ -489,6 +612,7 @@ let userRole = 'staff';
     <span id="today-label" style="font-size:13px;opacity:.6"></span>
     <button onclick="openCustSearchPopup()" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:600">👤 고객검색</button>
     <button onclick="openGSearch()" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:600">🔍 검색</button>
+    <button onclick="openQuoteConsole()" style="background:rgba(79,70,229,.55);color:#fff;border:1px solid rgba(79,70,229,.85);border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:600">💰 견적</button>
     <button onclick="showStats()" style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:600">📊 매출통계</button>
     <button onclick="openAligoSettings()" style="background:rgba(99,102,241,.5);color:#fff;border:1px solid rgba(99,102,241,.8);border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:600">📱 알리고</button>
     <button onclick="exportData()" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:600">💾 내보내기</button>
@@ -8278,4 +8402,342 @@ function closeDayDetail() {
   </div>
 </div>
 
+
+<!-- ===== 감탄 견적 콘솔 (격리 패널) ===== -->
+<div id="gc-dim"></div>
+<div id="gc-wrap">
+  <div id="gc-root">
+    <div id="gc-head">
+      <b>💰 견적 계산</b>
+      <button id="gc-close" aria-label="닫기">✕</button>
+    </div>
+    <div id="gc-body">
+      <div class="card pad">
+        <div class="sec"><span class="dot"></span>상품 선택</div>
+        <div class="prods" id="prods"></div>
+        <div id="opts"></div>
+        <div class="sec" style="margin-top:18px"><span class="dot"></span>추가 액자 · 앨범</div>
+        <div id="extras"></div>
+      </div>
+      <div style="margin-top:14px">
+        <div id="switchbox"></div>
+        <div class="quote">
+          <div class="qh" id="qh">
+            <div class="lb">예상 견적</div>
+            <div class="tt" id="total">0<em>원</em></div>
+          </div>
+          <div class="ql" id="lines"></div>
+          <div class="chips" id="chips"></div>
+          <div class="dep">예약금 <b id="dep">10만원</b> · 입금 후 예약 확정</div>
+        </div>
+        <div class="cmp" id="cmp" style="margin-top:14px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+
+/* ==========================================================================
+   감탄 견적 콘솔 — CRM 안에 격리 삽입 (IIFE: 바깥 이름과 절대 안 섞임)
+   ========================================================================== */
+(function(){
+"use strict";
+const $=s=>document.querySelector(s);
+const won=n=>n.toLocaleString('ko-KR');
+const PANEL='gc-root';
+
+/* ============================================================
+   가격 · 상품 (감탄사진관_통합관리.html + 가족_문의_상담.html 기준)
+   ============================================================ */
+const PRICE={ f5x7:30000, f8x10:50000,
+  f11al:500000, f16al:700000, f20al:800000, f20slim:800000, album:3000000, canvas:1200000 };
+const PRICE_META=[
+  {k:'f5x7',   label:'5×7 액자',      big:false, disc:false},
+  {k:'f8x10',  label:'8×10 액자',     big:false, disc:false},
+  {k:'f11al',  label:'11R 액자',      big:true,  disc:true, inch:'11x14인치'},
+  {k:'f16al',  label:'16R 액자',      big:true,  disc:true, inch:'16x20인치'},
+  {k:'f20al',  label:'20R 액자',      big:true,  disc:true, inch:'20x24인치'},
+  {k:'f20slim',label:'20R 슬림',      big:true,  disc:true},
+  {k:'canvas', label:'100×70 캔버스', big:true,  disc:true},
+  {k:'album',  label:'8×11 앨범',     big:false, disc:false},
+];
+// 큰 액자 = 대가족에서 선택 시 감탄스토리 계산으로 전환 + 감탄스토리에서 50% 할인
+const BIG=PRICE_META.filter(m=>m.big).map(m=>m.k);
+const DISC=PRICE_META.filter(m=>m.disc).map(m=>m.k);
+
+const DISCOUNT={bigFrames:50};
+const DISCOUNT_META=[
+  {k:'bigFrames', label:'큰 액자 추가 (11R · 16R · 20R · 20R 슬림 · 캔버스) — 전 상품'},
+];
+
+const ID_TYPES=[
+  {key:'passport', name:'여권 / 주민증 / 반명함', amt:30000},
+  {key:'visa',     name:'비자사진',              amt:35000},
+  {key:'job',      name:'취업사진 / 프로필',      amt:50000},
+];
+
+const PRODUCTS={
+  story:{name:'감탄스토리', short:'감탄스토리', c:'#4f46e5', bg:'#eef0ff',
+    sub:'25만 · 60분', base:250000, adultAdd:100000, kidAdd:50000, petAdd:50000,
+    deposit:100000, time:'60분', frame:'8×10 액자 1개', originals:'원본 100컷 이상 (2000x3000)', family:true},
+  simpfam:{name:'감탄 심플패밀리', short:'심플패밀리', c:'#059669', bg:'#e7f6ef',
+    sub:'10만 · 60분', base:100000, adultAdd:50000, kidAdd:30000, petAdd:30000,
+    deposit:100000, time:'60분', frame:'5×7 액자 1개', originals:'원본 30컷 이상', family:true},
+  bigfam:{name:'감탄 대가족', short:'대가족', c:'#d97706', bg:'#fdf2e3',
+    sub:'15만 균일 · 90분', base:150000, adultAdd:0, kidAdd:0, petAdd:50000, flat:true,
+    deposit:100000, time:'90분', frame:'8×10 액자 1개', originals:'원본 없음 · 액자컷 보정본 1장', family:true},
+  growth:{name:'가족성장 프로젝트', short:'가족성장', c:'#db2777', bg:'#fdeef6',
+    sub:'매년 15만~ · 3년', base:150000, kidStep:20000,
+    deposit:100000, time:'60분', frame:'8×10 액자 1개 (매년)', originals:'전체 원본 (2000x3000)', growth:true,
+    conflict:true},
+  kids:{name:'베이비 & 키즈 프로필', short:'키즈 프로필', c:'#7c3aed', bg:'#f3edff',
+    sub:'15만 · 60분', base:150000, weekendAdd:50000,
+    deposit:100000, time:'60분', frame:'5×7 액자 1개', originals:'원본 50컷 이상'},
+  profile:{name:'감탄 프로필', short:'프로필', c:'#0891b2', bg:'#e6f6fa',
+    sub:'10만 · 60분', base:100000, weekendAdd:50000,
+    deposit:100000, time:'60분', frame:'액자 없음', originals:'수정컷 파일만 (원본 미판매)'},
+  jangsu:{name:'부모님 장수 프로필', short:'장수 프로필', c:'#78716c', bg:'#f2f1f0',
+    sub:'20만 · 60분', base:200000,
+    deposit:100000, time:'60분', frame:'11×14 액자 1개', originals:'원본 파일 포함'},
+  id:{name:'증명 · 여권사진', short:'증명사진', c:'#475569', bg:'#eef1f5',
+    sub:'3만~', deposit:0, time:'—', frame:'—', originals:'웹용 파일 무료 제공', idphoto:true},
+};
+
+/* ============================================================
+   상태
+   ============================================================ */
+const S={prod:'story', adults:2, kids:0, pet:false, weekend:false,
+  idType:'passport', idPassportAdd:false, idIdCardAdd:false, idWebFile:false,
+  ex:{f5x7:0,f8x10:0,f11al:0,f16al:0,f20al:0,f20slim:0,album:0,canvas:0}};
+
+/* ============================================================
+   견적 계산
+   ============================================================ */
+function bigQty(o){return BIG.reduce((s,k)=>s+(o.ex[k]||0),0);}
+// 대가족에 큰 액자를 넣으면 감탄스토리 기준으로 계산된다
+function effProd(prodKey,o){
+  return (prodKey==='bigfam' && bigQty(o)>0) ? 'story' : prodKey;
+}
+
+function calc(prodKey, o){
+  o = o || S;
+  const eff=effProd(prodKey,o);
+  const switched = eff!==prodKey;
+  const P=PRODUCTS[eff];
+  const rows=[]; let total=0;
+  const add=(label,amt,plus)=>{rows.push({label,amt,plus}); total+=amt;};
+  const done=()=>({rows,total,eff,switched});
+
+  if(P.idphoto){
+    const t=ID_TYPES.find(x=>x.key===o.idType)||ID_TYPES[0];
+    const n=Math.max(1,o.adults);
+    add(t.name+(n>1?` (${n}인)`:''), t.amt*n);
+    if(o.idPassportAdd) add('여권 추가'+(n>1?` (${n}인)`:''), 10000*n, true);
+    if(o.idIdCardAdd)   add('주민증 추가'+(n>1?` (${n}인)`:''), 10000*n, true);
+    if(o.idWebFile)     add('인터넷 제출용 웹파일'+(n>1?` (${n}인)`:''), 5000*n, true);
+    return done();
+  }
+  if(P.growth){
+    const k=Math.max(1,o.kids);
+    const fee=P.base+(k-1)*P.kidStep;
+    add(`가족성장 ${2+k}인 (자녀 ${k}명) · 1년분`, fee);
+  } else if(P.flat){
+    add(`${P.name} (15인 이하)`, P.base);
+    if(o.pet) add('반려동물 추가', P.petAdd, true);
+  } else if(P.weekendAdd!==undefined){
+    add(`${P.name} (1인)`, P.base);
+    if(o.weekend) add('주말 · 공휴일 추가', P.weekendAdd, true);
+  } else if(P.adultAdd!==undefined){
+    add(`${P.name} 기본 (2인)`, P.base);
+    if(o.adults>2) add(`성인 ${o.adults-2}인 추가`, (o.adults-2)*P.adultAdd, true);
+    if(o.kids>0)   add(`미성년 자녀 ${o.kids}인 추가`, o.kids*P.kidAdd, true);
+    if(o.pet)      add('반려동물 추가', P.petAdd, true);
+  } else {
+    add(P.name, P.base);
+  }
+
+  // 추가 액자 · 앨범
+  let discBase=0;
+  PRICE_META.forEach(m=>{
+    const q=o.ex[m.k]||0; if(!q) return;
+    const unit=PRICE[m.k];
+    add(`${m.label} ${q}개 추가`, unit*q, true);
+    if(m.disc) discBase+=unit*q;
+  });
+
+  // 큰 액자 할인 (전 상품 공통)
+  const rate=DISCOUNT.bigFrames;
+  if(rate>0 && discBase>0){
+    add(`큰 액자 ${rate}% 할인`, -Math.round(discBase*rate/100), true);
+  }
+  return done();
+}
+function depositOf(k){const d=PRODUCTS[k].deposit; return d?`${d/10000}만원`:'없음';}
+
+/* ============================================================
+   견적 UI
+   ============================================================ */
+function accent(P){
+  const r=document.getElementById('gc-root'); if(!r) return;
+  r.style.setProperty('--gc-accent',P.c);
+  r.style.setProperty('--gc-accent-soft',P.bg);
+}
+function renderProds(){
+  $('#prods').innerHTML=Object.entries(PRODUCTS).map(([k,P])=>
+    `<button class="prod ${k===S.prod?'on':''}" data-gp="${k}" style="--pc:${P.c};--pbg:${P.bg}">
+      <b>${P.short}</b><span>${P.sub}</span></button>`).join('');
+}
+function renderOpts(){
+  const P=PRODUCTS[S.prod]; let h='';
+  if(P.idphoto){
+    h+=`<div class="seg">${ID_TYPES.map(t=>
+      `<button data-gid="${t.key}" class="${S.idType===t.key?'on':''}">${t.name} · ${won(t.amt)}</button>`).join('')}</div>`;
+    h+=stepRow('adults','인원','촬영 인원 수');
+    h+=toggleRow('idPassportAdd','여권 추가','1인당 +10,000원');
+    h+=toggleRow('idIdCardAdd','주민증 추가','1인당 +10,000원');
+    h+=toggleRow('idWebFile','인터넷 제출용 웹파일','1인당 +5,000원');
+  } else if(P.growth){
+    h+=stepRow('kids','자녀 수',`1명 15만 · 1명 추가마다 +2만`);
+    h+=`<div class="alert w" style="margin:12px 0 0">현재 <b>${2+Math.max(1,S.kids)}인 가족</b> 기준 · 1년 촬영 ${won(PRODUCTS.growth.base+(Math.max(1,S.kids)-1)*20000)}원 · 3년 패키지</div>`;
+  } else if(P.weekendAdd!==undefined){
+    h+=toggleRow('weekend','주말 · 공휴일',`+${won(P.weekendAdd)}원`);
+  } else if(P.flat){
+    h+=stepRow('adults','성인','15인 이하 인원 무관');
+    h+=stepRow('kids','미성년 자녀','15인 이하 인원 무관');
+    h+=toggleRow('pet','반려동물',`함께 촬영 시 +${won(P.petAdd)}원`);
+  } else if(P.adultAdd!==undefined){
+    h+=stepRow('adults','성인',`기본 2인 포함 · 추가 1인당 ${won(P.adultAdd)}원`);
+    h+=stepRow('kids','미성년 자녀',`1인당 ${won(P.kidAdd)}원`);
+    h+=toggleRow('pet','반려동물',`함께 촬영 시 +${won(P.petAdd)}원`);
+  } else {
+    h+=`<div class="row"><div class="rl"><b>1인 촬영</b><span>추가 옵션 없음</span></div></div>`;
+  }
+  $('#opts').innerHTML=h;
+}
+function stepRow(key,label,sub){
+  const min=key==='adults'?(PRODUCTS[S.prod].idphoto?1:1):0;
+  return `<div class="row"><div class="rl"><b>${label}</b><span>${sub}</span></div>
+    <div class="stp">
+      <button data-gstep="${key}" data-d="-1" ${S[key]<=min?'disabled':''}>−</button>
+      <span class="v">${S[key]}</span>
+      <button data-gstep="${key}" data-d="1">+</button>
+    </div></div>`;
+}
+function toggleRow(key,label,sub){
+  return `<div class="row"><div class="rl"><b>${label}</b><span>${sub}</span></div>
+    <label class="sw"><input type="checkbox" data-gtog="${key}" ${S[key]?'checked':''}><span class="sl"></span></label></div>`;
+}
+function renderExtras(){
+  $('#extras').innerHTML=PRICE_META.map(m=>{
+    const unset=PRICE[m.k]<=0;
+    let sub;
+    if(unset) sub='가격 설정 탭에서 입력';
+    else if(m.disc&&DISCOUNT.bigFrames>0)
+      sub=`1개당 ${won(PRICE[m.k])}원 → ${won(Math.round(PRICE[m.k]*(100-DISCOUNT.bigFrames)/100))}원 (50%)`;
+    else sub=`1개당 ${won(PRICE[m.k])}원 · 정가`;
+    const bigTag=(m.big&&S.prod==='bigfam')?'<span class="badge-unset">감탄스토리로 전환</span>':'';
+    return `<div class="row"><div class="rl"><b>${m.label}${unset?'<span class="badge-unset">단가 미설정</span>':bigTag}</b>
+      <span>${sub}</span></div>
+      <div class="stp">
+        <button data-gex="${m.k}" data-d="-1" ${S.ex[m.k]<=0?'disabled':''}>−</button>
+        <span class="v">${S.ex[m.k]}</span>
+        <button data-gex="${m.k}" data-d="1">+</button>
+      </div></div>`;
+  }).join('');
+}
+function renderQuote(){
+  const r0=calc(S.prod);
+  const {rows,total,eff,switched}=r0;
+  const P=PRODUCTS[eff];
+  $('#total').innerHTML=`${won(total)}<em>원</em>`;
+  $('#lines').innerHTML=rows.map(r=>`<div class="qr">
+      <span class="a ${r.plus?'p':''}">${r.plus?(r.amt<0?'− ':'+ '):''}${r.label}</span>
+      <span class="b">${r.amt===0&&r.plus?'—':(r.amt<0?'−'+won(-r.amt):(r.plus?'+':'')+won(r.amt))+'원'}</span>
+    </div>`).join('');
+
+  const chips=[];
+  if(switched) chips.push(`<span class="chip d">대가족 → 감탄스토리 자동 전환</span>`);
+  if(P.idphoto){ chips.push(`<span class="chip">${Math.max(1,S.adults)}명</span>`); }
+  else if(P.growth){ chips.push(`<span class="chip">${2+Math.max(1,S.kids)}인 가족</span>`,`<span class="chip">3년 패키지</span>`); }
+  else if(P.weekendAdd!==undefined||P.base===200000){ chips.push(`<span class="chip">1인</span>`); }
+  else { chips.push(`<span class="chip">총 ${S.adults+S.kids}명${S.pet?' + 반려동물':''}</span>`); }
+  chips.push(`<span class="chip">${P.time} 촬영</span>`);
+  if(P.frame!=='—') chips.push(`<span class="chip">${P.frame}</span>`);
+  chips.push(`<span class="chip ${P.conflict?'d':''}">${P.originals}</span>`);
+  $('#chips').innerHTML=chips.join('');
+  $('#dep').textContent=depositOf(eff);
+  $('#switchbox').innerHTML = switched
+    ? `<div class="alert d" style="margin:0 0 12px"><b>대가족에 큰 액자를 넣으셨네요.</b>
+       큰 액자(11R · 16R · 20R · 20R 슬림 · 캔버스)를 선택하면 감탄스토리 기준으로 계산됩니다.
+       현재 견적은 <b>감탄스토리 ${S.adults+S.kids}인</b> 기준입니다.</div>`
+    : '';
+  accent(P);
+  renderCmp(total);
+}
+function renderCmp(cur){
+  const P=PRODUCTS[S.prod];
+  if(!P.family){ $('#cmp').innerHTML=''; return; }
+  const keys=['story','simpfam','bigfam'];
+  const rows=keys.map(k=>{
+    const r=calc(k), t=r.total, d=t-cur, Q=PRODUCTS[k];
+    const cls=d>0?'up':(d<0?'dn':'eq');
+    const dt=d===0?'현재':(d>0?'+':'−')+won(Math.abs(d));
+    const sub=r.switched?'큰 액자 선택 → 감탄스토리로 계산':`${Q.frame} · ${Q.originals}`;
+    return `<button class="cmp-r ${k===S.prod?'cur':''}" data-gp="${k}">
+      <span class="n"><b>${Q.short}</b><span>${sub}</span></span>
+      <span class="t">${won(t)}원</span>
+      <span class="d ${cls}">${dt}</span></button>`;
+  }).join('');
+  $('#cmp').innerHTML=`<div class="cmp-h"><span>같은 구성으로 상품 바꾸면</span><span class="hint">눌러서 전환</span></div>${rows}
+    <div class="cmp-note"><b>원본을 원하시면 감탄스토리.</b> 대가족은 원본 없이 8×10 액자 1개 + 액자컷 보정본 1장입니다.
+    대가족에 큰 액자를 추가하면 자동으로 감탄스토리 계산으로 넘어갑니다.</div>`;
+}
+
+
+
+/* ---- 열고 닫기 ---- */
+let opened=false;
+function gcOpen(){
+  document.getElementById('gc-wrap').classList.add('on');
+  document.getElementById('gc-dim').classList.add('on');
+  if(!opened){ opened=true; renderAll(); }
+}
+function gcClose(){
+  document.getElementById('gc-wrap').classList.remove('on');
+  document.getElementById('gc-dim').classList.remove('on');
+}
+window.openQuoteConsole=gcOpen;
+
+/* ---- 이벤트 (패널 안에서만) ---- */
+document.addEventListener('click',e=>{
+  const t=e.target;
+  if(t.closest('#gc-close')||t.closest('#gc-dim')){ gcClose(); return; }
+  if(!t.closest('#gc-root')) return;
+
+  const p=t.closest('[data-gp]');
+  if(p){ S.prod=p.dataset.gp; if(PRODUCTS[S.prod].idphoto&&S.adults<1)S.adults=1; renderAll(); return; }
+
+  const st=t.closest('[data-gstep]');
+  if(st){ const k=st.dataset.gstep,d=+st.dataset.d;
+    S[k]=Math.max(k==='adults'?1:0,S[k]+d); renderOpts(); renderQuote(); return; }
+
+  const ex=t.closest('[data-gex]');
+  if(ex){ const k=ex.dataset.gex,d=+ex.dataset.d;
+    S.ex[k]=Math.max(0,S.ex[k]+d); renderExtras(); renderQuote(); return; }
+
+  const idb=t.closest('[data-gid]');
+  if(idb){ S.idType=idb.dataset.gid; renderOpts(); renderQuote(); return; }
+});
+document.addEventListener('change',e=>{
+  const tg=e.target.closest('[data-gtog]');
+  if(tg){ S[tg.dataset.gtog]=tg.checked; renderQuote(); }
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&document.getElementById('gc-wrap').classList.contains('on')) gcClose();
+});
+})();
+
+</script>
 </body>
