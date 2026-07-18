@@ -2256,7 +2256,6 @@ function saveBookings() {
   try { localStorage.setItem('gamtan_bookings', JSON.stringify(bookings.filter(b=>!b.smmate))); } catch(e) {}
   // ★ 금액 수정(override)된 SM 예약 보존용 캐시
   try { localStorage.setItem('gamtan_smmate_bookings', JSON.stringify(bookings.filter(b=>b.smmate))); } catch(e) {}
-  if(window.__onBookingsSaved) window.__onBookingsSaved();   // 감탄 콘솔 진행탭 새로고침
 }
 function saveCustomers() { scheduleSyncToSupabase(); }
 function saveDateMemos() { localStorage.setItem('gamtan_date_memos', JSON.stringify(dateMemos)); }
@@ -3876,8 +3875,6 @@ function togglePhotoSelected(bid, custName) {
   b.photoSelected = !b.photoSelected;
   saveBookings();
   _refreshWorkBadges(bid, b);
-  // ★ 감탄 콘솔 진행탭 연동: 사진 선택 배지 → 선택일 자동 기록
-  if(window.__jobPhotoSelected) window.__jobPhotoSelected(bid, b.photoSelected);
 }
 
 // 2단계 작업 배지 HTML 생성 (준비 + 출고)
@@ -4985,9 +4982,6 @@ function toggleCheck(id, stageIdx, checkIdx) {
   if(!b.stageChecks[stageIdx]) b.stageChecks[stageIdx]={};
   b.stageChecks[stageIdx][checkIdx] = !b.stageChecks[stageIdx][checkIdx];
   const checked = b.stageChecks[stageIdx][checkIdx];
-
-  // ★ 감탄 콘솔 진행탭 연동: 원본발송[3][1] / 사진선택[5][0] 체크 시 진행용 날짜 자동 기록
-  if(window.__jobStageCheck) window.__jobStageCheck(id, stageIdx, checkIdx, checked);
 
   // 5단계(리뷰/포켓) 고객 리뷰 확인 체크 → 카드 별 자동 연동
   if(stageIdx===4 && checkIdx===0) {
@@ -8576,7 +8570,7 @@ function closeDayDetail() {
 <div id="gc-wrap">
   <div id="gc-root">
     <div id="gc-head">
-      <b>💰 감탄 콘솔 <span id="gc-ver">v6</span></b>
+      <b>💰 감탄 콘솔 <span id="gc-ver">v7</span></b>
       <button id="gc-close" aria-label="닫기">✕</button>
     </div>
     <div id="gc-tabwrap"><div class="tabs" id="gc-tabs"></div></div>
@@ -10177,38 +10171,7 @@ function gcOpen(){
     if($('#jm_date')) $('#jm_date').value=t;
     C.date=t;
     jmLoad(); jNotifyInit();
-    window.__onBookingsSaved=()=>{ if(gTab==='jobs') renderJobs(); else jCheck(); };
 
-    // 왼쪽 체크리스트 → 진행 날짜 자동 기록
-    // [3][1]=원본 발송 → sentAt · [5][0]=선택번호 확인 → pickedAt
-    window.__jobStageCheck=(bid, stageIdx, checkIdx, checked)=>{
-      const id='crm:'+bid;
-      const m=meta(id);
-      const t=new Date().toISOString().slice(0,10);
-      let touched=false;
-      if(stageIdx===3 && checkIdx===1){
-        if(checked && !m.sentAt){ m.sentAt=t; touched=true; }
-      }
-      if(stageIdx===5 && checkIdx===0){
-        if(checked && !m.pickedAt){ m.pickedAt=t; touched=true; }
-      }
-      if(touched){
-        Object.keys(notified).forEach(x=>{ if(x.startsWith(id)) delete notified[x]; });
-        jmSave();
-        if(gTab==='jobs') renderJobs(); else jCheck();
-      }
-    };
-
-    // 왼쪽 '사진 선택' 배지(photoSelected) → 선택일 자동 기록
-    window.__jobPhotoSelected=(bid, selected)=>{
-      const id='crm:'+bid; const m=meta(id);
-      if(selected && !m.pickedAt){
-        m.pickedAt=new Date().toISOString().slice(0,10);
-        Object.keys(notified).forEach(x=>{ if(x.startsWith(id)) delete notified[x]; });
-        jmSave();
-        if(gTab==='jobs') renderJobs(); else jCheck();
-      }
-    };
     setInterval(()=>{ if(document.getElementById('gc-wrap')){ if(gTab==='jobs') renderJobs(); else jCheck(); } }, 60000);
     // 상품 셀렉트 채우기
     const sel=$('#jm_prod');
