@@ -3876,6 +3876,8 @@ function togglePhotoSelected(bid, custName) {
   b.photoSelected = !b.photoSelected;
   saveBookings();
   _refreshWorkBadges(bid, b);
+  // ★ 감탄 콘솔 진행탭 연동: 사진 선택 배지 → 선택일 자동 기록
+  if(window.__jobPhotoSelected) window.__jobPhotoSelected(bid, b.photoSelected);
 }
 
 // 2단계 작업 배지 HTML 생성 (준비 + 출고)
@@ -8574,7 +8576,7 @@ function closeDayDetail() {
 <div id="gc-wrap">
   <div id="gc-root">
     <div id="gc-head">
-      <b>💰 감탄 콘솔 <span id="gc-ver">v5</span></b>
+      <b>💰 감탄 콘솔 <span id="gc-ver">v6</span></b>
       <button id="gc-close" aria-label="닫기">✕</button>
     </div>
     <div id="gc-tabwrap"><div class="tabs" id="gc-tabs"></div></div>
@@ -10191,6 +10193,17 @@ function gcOpen(){
         if(checked && !m.pickedAt){ m.pickedAt=t; touched=true; }
       }
       if(touched){
+        Object.keys(notified).forEach(x=>{ if(x.startsWith(id)) delete notified[x]; });
+        jmSave();
+        if(gTab==='jobs') renderJobs(); else jCheck();
+      }
+    };
+
+    // 왼쪽 '사진 선택' 배지(photoSelected) → 선택일 자동 기록
+    window.__jobPhotoSelected=(bid, selected)=>{
+      const id='crm:'+bid; const m=meta(id);
+      if(selected && !m.pickedAt){
+        m.pickedAt=new Date().toISOString().slice(0,10);
         Object.keys(notified).forEach(x=>{ if(x.startsWith(id)) delete notified[x]; });
         jmSave();
         if(gTab==='jobs') renderJobs(); else jCheck();
