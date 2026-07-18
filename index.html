@@ -462,11 +462,11 @@ let userRole = 'staff';
 .login-err{color:#ef4444;font-size:13px;margin-top:8px;min-height:20px}
 .login-loading{color:#6366f1;font-size:13px;margin-top:8px}
 
-/* ===== 감탄 견적 콘솔 — 껍데기 ===== */
+/* ===== 감탄 콘솔 — 껍데기 ===== */
 #gc-dim{position:fixed;inset:0;background:rgba(10,12,16,.4);z-index:9998;opacity:0;
   pointer-events:none;transition:opacity .2s}
 #gc-dim.on{opacity:1;pointer-events:auto}
-#gc-wrap{position:fixed;top:0;right:0;bottom:0;width:min(560px,96vw);z-index:9999;
+#gc-wrap{position:fixed;top:0;right:0;bottom:0;width:min(600px,96vw);z-index:9999;
   transform:translateX(103%);transition:transform .26s cubic-bezier(.4,0,.2,1);
   box-shadow:-8px 0 40px rgba(10,12,16,.18)}
 #gc-wrap.on{transform:translateX(0)}
@@ -478,10 +478,19 @@ let userRole = 'staff';
 #gc-head{display:flex;align-items:center;justify-content:space-between;gap:10px;
   padding:13px 16px;background:#fff;border-bottom:1px solid #e3e6ec;flex:none}
 #gc-head b{font-size:15px;font-weight:800}
+#gc-ver{font-size:10px;font-weight:700;background:#4f46e5;color:#fff;padding:2px 6px;
+  border-radius:5px;vertical-align:2px;margin-left:4px}
 #gc-close{width:32px;height:32px;border:1px solid #e3e6ec;border-radius:9px;background:#fff;
   font-size:14px;color:#8b93a3;cursor:pointer;line-height:1;flex:none}
 #gc-close:hover{background:#f0f2f6;color:#14181f}
+#gc-tabwrap{padding:10px 14px 0;background:#fff;border-bottom:1px solid #e3e6ec;flex:none}
+#gc-tabwrap .tabs{padding-bottom:10px}
 #gc-body{flex:1;overflow-y:auto;padding:14px;-webkit-overflow-scrolling:touch}
+#gc-toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(18px);
+  background:#14181f;color:#fff;font-size:13px;font-weight:600;padding:11px 19px;border-radius:11px;
+  opacity:0;pointer-events:none;transition:.22s;z-index:10000;
+  font-family:'Pretendard',system-ui,sans-serif}
+#gc-toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 @media(max-width:640px){#gc-wrap{width:100vw}}
 
 #gc-root{
@@ -503,6 +512,12 @@ let userRole = 'staff';
 .results{max-width:1180px;margin:0 auto;padding:0 14px}
 #gc-root /* ===== 탭 ===== */
 .tabbar{max-width:1180px;margin:14px auto 0;padding:0 14px}
+#gc-root .tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:3px;scrollbar-width:none}
+#gc-root .tabs::-webkit-scrollbar{display:none}
+#gc-root .tab{flex:none;border:1.5px solid var(--gc-line);background:#fff;border-radius:99px;padding:8px 15px;
+  font-size:13px;font-weight:700;color:var(--gc-ink2);cursor:pointer;white-space:nowrap;transition:.15s}
+#gc-root .tab.on{border-color:var(--gc-ink);background:var(--gc-ink);color:#fff}
+#gc-root .tab:focus-visible{outline:2px solid var(--gc-accent);outline-offset:2px}
 #gc-root .card{background:var(--gc-card);border:1px solid var(--gc-line);border-radius:var(--gc-r);box-shadow:var(--gc-sh)}
 #gc-root .pad{padding:17px 17px 19px}
 #gc-root .sec{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;color:var(--gc-ink3);
@@ -593,10 +608,29 @@ let userRole = 'staff';
   font-size:11.8px;color:var(--gc-warn);line-height:1.6}
 #gc-root /* ===== 상담 스크립트 ===== */
 .step{border-top:1px solid var(--gc-line2)}
+#gc-root .step:first-child{border-top:0}
+#gc-root .step-h{width:100%;display:flex;align-items:center;gap:11px;padding:13px 2px;background:none;
+  border:0;cursor:pointer;text-align:left}
+#gc-root .step-n{width:25px;height:25px;border-radius:8px;background:var(--gc-accent-soft);color:var(--gc-accent);
+  font-size:12px;font-weight:800;display:grid;place-items:center;flex:none;transition:.25s}
+#gc-root .step-t{flex:1;font-size:13.8px;font-weight:700}
+#gc-root .step-t em{display:block;font-style:normal;font-size:11.3px;font-weight:500;color:var(--gc-ink3);margin-top:1px}
 #gc-root .chev{color:#aeb5c1;font-size:12px;transition:transform .18s;flex:none}
+#gc-root .step.open .chev{transform:rotate(90deg)}
+#gc-root .step-b{display:none;padding:2px 2px 15px 36px}
+#gc-root .step.open .step-b{display:block}
+#gc-root .line{font-size:13.3px;color:#2b3342;padding:9px 12px;margin-bottom:7px;background:#fafbfd;
+  border:1px solid var(--gc-line2);border-radius:9px;border-left:3px solid var(--gc-accent);line-height:1.62}
+#gc-root .line:last-child{margin-bottom:0}
+#gc-root .line.ask{border-left-color:#0891b2;background:#f2fbfd}
+#gc-root .tipline{font-size:11.5px;color:var(--gc-ink3);padding:3px 4px 0;font-style:italic}
+#gc-root .ghost{width:100%;margin-top:13px;padding:10px;border:1px dashed var(--gc-line);background:#fff;
+  border-radius:10px;font-size:12.5px;font-weight:700;color:var(--gc-ink2);cursor:pointer}
+#gc-root .ghost:hover{border-color:var(--gc-accent);color:var(--gc-accent)}
 #gc-root /* ===== 고객 정보 바 ===== */
 .custbar{background:var(--gc-card);border:1px solid var(--gc-line);border-radius:var(--gc-r);
   box-shadow:var(--gc-sh);padding:14px 15px;margin-bottom:14px}
+#gc-root .fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:9px}
 #gc-root .f label{display:block;font-size:10.5px;font-weight:700;color:var(--gc-ink3);margin-bottom:4px;padding-left:2px}
 #gc-root .f input,#gc-root .f select{width:100%;font-size:13.5px;border:1.5px solid var(--gc-line);border-radius:9px;
   padding:8px 10px;background:#fff;color:var(--gc-ink)}
@@ -604,9 +638,36 @@ let userRole = 'staff';
 #gc-root /* ===== 메시지 ===== */
 .msg{background:var(--gc-card);border:1px solid var(--gc-line);border-radius:var(--gc-r);box-shadow:var(--gc-sh);
   padding:14px 15px 13px;margin-bottom:12px}
+#gc-root .msg.hide{display:none}
+#gc-root .msg-h{display:flex;align-items:center;justify-content:space-between;gap:9px;margin-bottom:10px}
+#gc-root .msg-t{font-size:14px;font-weight:800;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+#gc-root .kind{font-size:10px;font-weight:700;padding:2px 6px;border-radius:5px;background:var(--gc-accent-soft);color:var(--gc-accent)}
+#gc-root .kind.mail{background:#e7f6ef;color:var(--gc-ok)}
+#gc-root .kind.talk{background:#fef3c7;color:#92400e}
+#gc-root .btns{display:flex;gap:6px;flex:none}
+#gc-root .btn{border:0;background:var(--gc-accent);color:#fff;font-size:12.3px;font-weight:700;
+  padding:8px 13px;border-radius:9px;cursor:pointer;transition:.14s}
+#gc-root .btn:hover{filter:brightness(1.08)}
+#gc-root .btn.done{background:var(--gc-ok)}
+#gc-root .btn.alt{background:#fff;color:var(--gc-ink2);border:1px solid var(--gc-line)}
+#gc-root .btn.alt:hover{border-color:var(--gc-accent);color:var(--gc-accent);filter:none}
+#gc-root .btn[disabled]{opacity:.4;pointer-events:none}
+#gc-root .ta{width:100%;background:#fbfcfe;border:1px solid var(--gc-line2);border-radius:10px;padding:11px 12px;
+  font-size:13px;line-height:1.72;color:#2b3342;white-space:pre-wrap;word-break:break-word;
+  resize:none;overflow:hidden;display:block}
+#gc-root .ta:focus{outline:none;border-color:var(--gc-accent);background:#fff}
 #gc-root .hint{font-size:10.5px;color:#aeb5c1;margin-top:5px;padding-left:3px}
 #gc-root /* 액자 초이스 빌더 */
 .choice{background:#fafbfd;border:1px solid var(--gc-line2);border-radius:10px;padding:10px;margin-bottom:10px}
+#gc-root .choice-l{font-size:11px;font-weight:700;color:var(--gc-ink2);margin-bottom:8px}
+#gc-root .crow{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+#gc-root .crow select{flex:1;min-width:0;font-size:12.3px;border:1.5px solid var(--gc-line);border-radius:8px;padding:6px 7px;background:#fff}
+#gc-root .crow input{width:44px;font-size:12.3px;border:1.5px solid var(--gc-line);border-radius:8px;padding:6px 3px;text-align:center}
+#gc-root .crow .x{font-size:10.5px;color:var(--gc-ink3);flex:none}
+#gc-root .crow .del{width:27px;height:27px;border:1px solid var(--gc-line);border-radius:8px;background:#fff;
+  cursor:pointer;color:var(--gc-danger);font-size:14px;line-height:1;flex:none}
+#gc-root .addrow{border:1px dashed var(--gc-line);background:#fff;border-radius:8px;padding:7px;width:100%;
+  font-size:12px;font-weight:700;color:var(--gc-accent);cursor:pointer}
 #gc-root /* ===== 규정 ===== */
 .rule{background:var(--gc-card);border:1px solid var(--gc-line);border-radius:var(--gc-r);box-shadow:var(--gc-sh);
   padding:14px 15px;margin-bottom:12px}
@@ -632,6 +693,10 @@ let userRole = 'staff';
 #gc-root /* ===== 진행 현황 ===== */
 .jbar{background:var(--gc-card);border:1px solid var(--gc-line);border-radius:var(--gc-r);box-shadow:var(--gc-sh);
   padding:13px 15px;margin-bottom:12px}
+#gc-toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(18px);
+  background:var(--gc-ink);color:#fff;font-size:13px;font-weight:600;padding:11px 19px;border-radius:11px;
+  opacity:0;pointer-events:none;transition:.22s;z-index:60}
+#gc-toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 </style>
 </head>
 <body>
@@ -660,7 +725,7 @@ let userRole = 'staff';
     <span id="today-label" style="font-size:13px;opacity:.6"></span>
     <button onclick="openCustSearchPopup()" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:600">👤 고객검색</button>
     <button onclick="openGSearch()" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:600">🔍 검색</button>
-    <button onclick="openQuoteConsole()" style="background:rgba(79,70,229,.55);color:#fff;border:1px solid rgba(79,70,229,.85);border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:600">💰 견적</button>
+    <button onclick="openQuoteConsole()" style="background:rgba(79,70,229,.55);color:#fff;border:1px solid rgba(79,70,229,.85);border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:600">💰 콘솔</button>
     <button onclick="showStats()" style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:600">📊 매출통계</button>
     <button onclick="openAligoSettings()" style="background:rgba(99,102,241,.5);color:#fff;border:1px solid rgba(99,102,241,.8);border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:600">📱 알리고</button>
     <button onclick="exportData()" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:600">💾 내보내기</button>
@@ -8451,51 +8516,125 @@ function closeDayDetail() {
 </div>
 
 
-<!-- ===== 감탄 견적 콘솔 (격리 패널) ===== -->
+<!-- ===== 감탄 콘솔 (격리 패널) ===== -->
 <div id="gc-dim"></div>
+<div id="gc-toast"></div>
 <div id="gc-wrap">
   <div id="gc-root">
     <div id="gc-head">
-      <b>💰 견적 계산</b>
+      <b>💰 감탄 콘솔 <span id="gc-ver">v3</span></b>
       <button id="gc-close" aria-label="닫기">✕</button>
     </div>
+    <div id="gc-tabwrap"><div class="tabs" id="gc-tabs"></div></div>
     <div id="gc-body">
-      <div class="card pad">
-        <div class="sec"><span class="dot"></span>상품 선택</div>
-        <div class="prods" id="prods"></div>
-        <div id="opts"></div>
-        <div class="sec" style="margin-top:18px"><span class="dot"></span>추가 액자 · 앨범</div>
-        <div id="extras"></div>
-      </div>
-      <div style="margin-top:14px">
-        <div id="switchbox"></div>
-        <div class="quote">
-          <div class="qh" id="qh">
-            <div class="lb">예상 견적</div>
-            <div class="tt" id="total">0<em>원</em></div>
-          </div>
-          <div class="ql" id="lines"></div>
-          <div class="chips" id="chips"></div>
-          <div class="dep">예약금 <b id="dep">10만원</b> · 입금 후 예약 확정</div>
+
+      <div id="gp-quote">
+        <div class="card pad">
+          <div class="sec"><span class="dot"></span>상품 선택</div>
+          <div class="prods" id="prods"></div>
+          <div id="opts"></div>
+          <div class="sec" style="margin-top:18px"><span class="dot"></span>추가 액자 · 앨범</div>
+          <div id="extras"></div>
         </div>
-        <div class="cmp" id="cmp" style="margin-top:14px"></div>
+        <div style="margin-top:14px">
+          <div id="switchbox"></div>
+          <div class="quote">
+            <div class="qh" id="qh">
+              <div class="lb">예상 견적</div>
+              <div class="tt" id="total">0<em>원</em></div>
+            </div>
+            <div class="ql" id="lines"></div>
+            <div class="chips" id="chips"></div>
+            <div class="dep">예약금 <b id="dep">10만원</b> · 입금 후 예약 확정</div>
+          </div>
+          <div class="cmp" id="cmp" style="margin-top:14px"></div>
+        </div>
       </div>
+
+      <div id="gp-msg" style="display:none">
+        <div class="custbar">
+          <div class="fields">
+            <div class="f"><label>고객 성함</label><input id="c_name" placeholder="홍길동"></div>
+            <div class="f"><label>아이 이름</label><input id="c_kid" placeholder="은우"></div>
+            <div class="f"><label>휴대폰</label><input id="c_phone" type="tel" inputmode="numeric" placeholder="01012345678"></div>
+            <div class="f"><label>촬영일</label><input id="c_date" type="date"></div>
+            <div class="f"><label>시간</label><input id="c_time" type="time" value="11:00"></div>
+          </div>
+          <div class="hint" style="margin-top:7px">상품·인원은 <b>견적</b> 탭에서 정한 게 그대로 문자에 들어갑니다</div>
+        </div>
+        <div class="seg" id="msgcats" style="margin-bottom:12px"></div>
+        <div id="msglist"></div>
+      </div>
+
+      <div id="gp-script" style="display:none">
+        <div class="card pad">
+          <div class="sec"><span class="dot"></span>전화 상담 흐름</div>
+          <div id="steps"></div>
+          <button class="ghost" id="expand">전체 펼치기</button>
+        </div>
+      </div>
+
+      <div id="gp-price" style="display:none">
+        <div class="alert d" id="conflictBox"></div>
+        <div class="card pad">
+          <div class="sec"><span class="dot"></span>추가 액자 · 앨범 단가</div>
+          <div class="alert w">여기서 고친 값은 견적·문자에 바로 반영되지만, 새로고침하면 기본값으로 돌아갑니다.</div>
+          <table class="ptbl"><thead><tr><th>항목</th><th class="r">단가 (원)</th></tr></thead>
+            <tbody id="ptbody"></tbody></table>
+        </div>
+        <div class="card pad" style="margin-top:14px">
+          <div class="sec"><span class="dot"></span>할인 규칙</div>
+          <div class="alert w"><b>큰 액자</b>(11R · 16R · 20R · 20R 슬림 · 100×70 캔버스)는 어느 상품에서든 50% 할인.<br>
+            5×7 · 8×10은 기본 제공 사이즈라 추가해도 정가이며, 8×11 앨범도 할인 대상이 아닙니다.<br>
+            대가족에 큰 액자를 넣으면 감탄스토리 계산으로 자동 전환됩니다.</div>
+          <table class="ptbl"><thead><tr><th>조건</th><th class="r">할인율 (%)</th></tr></thead>
+            <tbody id="dtbody"></tbody></table>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
 
 
 <script>
-
 /* ==========================================================================
-   감탄 견적 콘솔 — CRM 안에 격리 삽입 (IIFE)
+   감탄 콘솔 v3 — CRM 안에 격리 삽입 (IIFE)
+   견적 · 문자 · 상담 스크립트 · 가격 설정
    ========================================================================== */
 (function(){
 "use strict";
 const ROOT=()=>document.getElementById('gc-root');
-const $=s=>{ const r=ROOT(); return r?r.querySelector(s):null; };
+const $=s=>{const r=ROOT();return r?r.querySelector(s):null;};
+const $$=s=>{const r=ROOT();return r?[...r.querySelectorAll(s)]:[];};
 const won=n=>n.toLocaleString('ko-KR');
+const ACCT="[635-057095-01-019 기업은행 / 김시현(감탄사진관)]";
+const KAKAO="http://pf.kakao.com/_xiNxoGs";
+const INSTA="https://www.instagram.com/studio_gamtan/";
 
+let _tt;
+function toast(m){
+  const t=document.getElementById('gc-toast'); if(!t) return;
+  t.textContent=m||'복사됐어요 ✓'; t.classList.add('on');
+  clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove('on'),1600);
+}
+async function copy(text,btn){
+  let ok=false;
+  if(navigator.clipboard&&window.isSecureContext){
+    try{ await navigator.clipboard.writeText(text); ok=true; }catch(e){}
+  }
+  if(!ok){
+    try{
+      const ta=document.createElement('textarea'); ta.value=text;
+      ta.style.cssText='position:fixed;top:0;left:0;width:1px;height:1px;opacity:0';
+      document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0,text.length);
+      ok=document.execCommand('copy'); document.body.removeChild(ta);
+    }catch(e){}
+  }
+  if(ok&&btn){ const o=btn.textContent; btn.textContent='복사됨 ✓'; btn.classList.add('done');
+    setTimeout(()=>{btn.textContent=o;btn.classList.remove('done');},1400); }
+  toast(ok?'복사됐어요 ✓':'복사가 막혀 있어요. 길게 눌러 복사해 주세요.');
+}
 /* ============================================================
    가격 · 상품 (감탄사진관_통합관리.html + 가족_문의_상담.html 기준)
    ============================================================ */
@@ -8743,49 +8882,1092 @@ function renderCmp(cur){
     대가족에 큰 액자를 추가하면 자동으로 감탄스토리 계산으로 넘어갑니다.</div>`;
 }
 
+/* ============================================================
+   상담 스크립트
+   ============================================================ */
+const SCRIPT=[
+ {n:1,t:'가족 구성 파악',e:'먼저 묻고 듣기',lines:[
+  ['ask','"네, 가족사진 문의 주셨네요^^ 먼저 가족분이 몇 분이나 되시는지 여쭤봐도 될까요? 아이들은 몇 살이고 몇 명인지도 알려주시면 좋아요~"'],
+  ['ask','"혹시 아이가 처음 사진관 오는 거예요, 아니면 전에 촬영 경험이 있나요?"'],
+ ]},
+ {n:2,t:'성향 파악',e:'현장 케어 방향 잡기',lines:[
+  ['ask','"아이가 평소에 낯을 좀 가리는 편인가요, 아니면 활발한 편인가요?"'],
+  ['ask','"부모님들은 카메라 앞에서 표정 짓는 거 편하신 편이세요, 아니면 좀 어색해하시는 편이세요?"'],
+ ]},
+ {n:3,t:'감탄사진관 강점',e:'10분 대화 · 다이나믹 · 원본',lines:[
+  ['','"사실 저희가 낯가림 있는 아이들 촬영을 제일 자신 있어 해요. 아이가 마음 열 때까지 절대 서두르지 않거든요^^"'],
+  ['','"그래서 저희는 촬영 들어가기 전에 작가랑 10분 정도 대화 나누는 시간을 꼭 가져요. 아이도 처음 오는 공간이라 긴장이 되잖아요. 그 시간 동안 낯선 공간에 적응하고 마음을 좀 풀게 도와드리는 거예요."'],
+  ['','"그리고 그 대화가 작가한테도 중요해요. \'아, 이 가족은 이런 점이 매력이구나, 이 아이는 이럴 때 제일 환하게 웃는구나\' 하는 걸 미리 파악하거든요. 그래야 그 가족에 딱 맞게 찍어드릴 수 있어요."'],
+  ['','"이렇게 성향을 먼저 알고 나면, 그 아이에 맞게 다이나믹하게 여러 컨셉으로 찍어드려요. 가만히 앉아만 있는 게 아니라 움직이고 웃는 자연스러운 순간들을 많이 담아요."'],
+  ['','"그래서 원본도 넉넉하게 드려요. 한 장면만 건지는 게 아니라, 여러 모습 중에 가장 그 가족다운 순간을 고르실 수 있게요~"'],
+ ]},
+ {n:4,t:'원본 안내',e:'니즈 끌어내고 → 상품 방향 잡기',lines:[
+  ['ask','"혹시 촬영하시고 나서 사진 파일을, 그러니까 원본을 직접 받아서 간직하고 싶으신 편이세요? 아니면 예쁜 액자 한 점 잘 받으시면 충분하신 편이세요?"'],
+  ['tip','이 한 질문으로 상품 방향이 갈려요 — 원본 원하면 스토리/심플, 액자면 대가족.'],
+  ['','"원본을 받아두시면 좋은 게, 나중에 핸드폰 배경화면으로도 쓰시고, 연하장이나 가족 단체방에도 올리시고, 또 몇 년 지나서 \'그때 이 표정 좋았는데\' 하면서 다시 꺼내보시거든요. 액자는 한 장면이지만, 원본은 그날 가족의 여러 모습이 다 남는 거예요^^"'],
+  ['','"그래서 상품마다 조금 차이가 있는데요. 저희 감탄스토리는 원본을 100컷 이상 넉넉하게 다 드려요. 가족분들 표정 하나하나 다 골라보실 수 있어요."'],
+  ['','"심플패밀리는 원본을 30컷 이상 드리고요. 깔끔하게 핵심 컷 위주로 받으시는 거예요."'],
+  ['','"다만 대가족 촬영은 인원이 많다 보니까 구성이 좀 달라요. 이건 원본 파일은 따로 안 나가고, 제일 잘 나온 액자컷 보정본 한 장으로 정리되는 상품이에요. 대신 큰 액자(8×10)로 온 가족이 다 같이 멋지게 남는 거죠."'],
+  ['','"그래서 만약에 인원이 좀 많으시더라도 \'우리는 원본을 꼭 받고 싶다\' 하시면, 대가족보다는 감탄스토리로 진행하시는 걸 추천드려요. 그럼 인원 추가는 좀 있지만 원본을 다 받으실 수 있거든요^^"'],
+  ['','"반대로 \'액자 한 점 잘 받으면 됐다\' 하시면 대가족이 합리적이에요. 가족분들 상황에 맞춰서 편하게 골라드릴게요~"'],
+ ]},
+ {n:5,t:'마무리',e:'안심시키기',lines:[
+  ['','"아이가 좀 울거나 떼써도 전혀 걱정 안 하셔도 돼요. 그런 순간들 케어하는 게 저희 일이니까요^^ 편하게 오셔서 맡겨주시면 잘 나올 수 있게 해드릴게요."'],
+  ['','"정답이 있는 건 아니고요, 가족분들이 사진을 어떻게 간직하고 싶으신지가 제일 중요해요. 제가 두 가지 다 안내해드릴 테니 천천히 정하셔도 됩니다^^"'],
+  ['tip','②에서 들은 성향 답을 받아서 "그럼 더더욱 저희가 잘 맞겠네요" 식으로 연결하면 상담이 살아나요.'],
+ ]},
+];
+function renderScript(){
+  $('#steps').innerHTML=SCRIPT.map((s,i)=>`
+    <div class="step ${i===0?'open':''}">
+      <button class="step-h"><span class="step-n">${s.n}</span>
+        <span class="step-t">${s.t}<em>${s.e}</em></span><span class="chev">▶</span></button>
+      <div class="step-b">${s.lines.map(([k,v])=>
+        k==='tip'?`<div class="tipline">${v}</div>`:`<div class="line ${k}">${v}</div>`).join('')}</div>
+    </div>`).join('');
+}
+
+/* ============================================================
+   메시지
+   ============================================================ */
+const SIZES=["8x10인치","5x7인치","11x14인치","20R 슬림","슬림3구","20x24인치","5x10인치","캔버스","직접입력"];
+const C={}; // 고객 정보
+const MV={}; // 메시지별 필드값
+const CH={}; // 액자 초이스
 
 
-/* ---- 이 모듈 전용 renderAll (CRM 것과 절대 안 섞이게 안에서 정의) ---- */
+/* ===== 의상 안내 (감탄사진관_통합관리.html 원문) ===== */
+const D_STORY_KID=`*
+촬영의상은 직접 준비해주시면 됩니다.
+가족촬영 의상은 전체적인 조화가 가장 중요합니다.
+패턴이 강렬한 의상이나 큰 로고가 들어간 옷은 인물보다 의상이 부각되어 추천드리지 않으며,
+단정하고 깔끔한 캐주얼 의상을 추천드립니다.
+
+컬러 톤을 섞어 준비하신다면
+체격이 있는 분은 진한 색, 마른 체형의 분은 밝은 색이 잘 어울립니다.
+부모님은 심플하게, 아이는 포인트 있게 코디하셔도 좋습니다.
+남성분들은 라운드 티셔츠·맨투맨보다 긴팔 셔츠가 사진에 더 예쁘게 나옵니다.
+흑백 촬영을 원하시는 경우 중간~진한 톤의 의상이 좋습니다.
+의상이 고민되시면 촬영 날 한두 벌 챙겨오신 뒤 함께 상의 후 결정하셔도 됩니다.
+여성분들은 헤어·메이크업을 평소 외출 시보다 신경 써주시길 바랍니다.
+남성분들도 선크림이나 비비크림을 살짝 발라주시면 더욱 좋습니다.
+
+미취학 아이들은 스튜디오에서 옷을 갈아입는 걸 힘들어 하는 경우가 많으니
+아이 촬영 의상은 미리 착용하고 오시는 것을 추천드립니다.
+신발은 신고 촬영할 수도 있고 맨발로 촬영할 수도 있습니다.
+(신발을 준비하시는 경우 깨끗한 상태여야 사용 가능합니다.)`;
+const D_STORY_NOKID=`*
+촬영의상은 직접 준비해주시면 됩니다.
+가족촬영 의상은 전체적인 조화가 가장 중요합니다.
+패턴이 강렬한 의상이나 큰 로고가 들어간 옷은 인물보다 의상이 부각되어 추천드리지 않으며,
+단정하고 깔끔한 캐주얼 의상을 추천드립니다.
+
+컬러 톤을 섞어 준비하신다면
+체격이 있는 분은 진한 색, 마른 체형의 분은 밝은 색이 잘 어울립니다.
+사계절 내내 두고 보기 좋도록 한 계절에 치우친 의상은 피해주세요.
+남성분들은 라운드 티셔츠·맨투맨보다 긴팔 셔츠가 사진에 더 예쁘게 나옵니다.
+흑백 촬영을 원하시는 경우 중간~진한 톤의 의상이 좋습니다.
+의상이 고민되시면 촬영 날 한두 벌 챙겨오신 뒤 함께 상의 후 결정하셔도 됩니다.
+여성분들은 헤어·메이크업을 평소 외출 시보다 신경 써주시길 바랍니다.
+남성분들도 선크림이나 비비크림을 살짝 발라주시면 더욱 좋습니다.
+
+신발은 신고 촬영할 수도 있고 맨발로 촬영할 수도 있습니다.
+(신발을 준비하시는 경우 깨끗한 상태여야 사용 가능합니다.)`;
+const D_BIG_KID=`*
+촬영의상은 직접 준비해주시면 됩니다.
+가족촬영 의상은 전체적인 조화가 가장 중요합니다.
+패턴이 강렬한 의상이나 큰 로고가 들어간 옷은 인물보다 의상이 부각되어 추천드리지 않으며,
+단정하고 깔끔한 의상을 추천드립니다.
+
+컬러 톤을 섞어 준비하신다면
+체격이 있는 분은 진한 색, 마른 체형의 분은 밝은 색이 잘 어울립니다.
+연세가 있는 어르신들께는 진한 색상에 카라가 있는 옷을 추천드립니다.
+어머님께서 카라 없는 옷을 입으실 경우 목걸이나 스카프 등을 준비해주시면 좋습니다.
+의상이 고민되시면 촬영 날 한두 벌 챙겨오신 뒤 함께 상의 후 결정하셔도 됩니다.
+여성분들은 헤어·메이크업을 평소 외출 시보다 신경 써주시길 바랍니다.
+남성분들도 선크림이나 비비크림을 살짝 발라주시면 더욱 좋습니다.
+
+미취학 아이들은 스튜디오에서 옷을 갈아입는 걸 힘들어 하는 경우가 많으니
+아이 촬영 의상은 미리 착용하고 오시는 것을 추천드립니다.`;
+const D_BIG_NOKID=`*
+촬영의상은 직접 준비해주시면 됩니다.
+가족촬영 의상은 전체적인 조화가 가장 중요합니다.
+패턴이 강렬한 의상이나 큰 로고가 들어간 옷은 인물보다 의상이 부각되어 추천드리지 않으며,
+단정하고 깔끔한 의상을 추천드립니다.
+
+컬러 톤을 섞어 준비하신다면
+체격이 있는 분은 진한 색, 마른 체형의 분은 밝은 색이 잘 어울립니다.
+사계절 내내 두고 보기 좋도록 한 계절에 치우친 의상은 피해주세요.
+연세가 있는 어르신들께는 진한 색상에 카라가 있는 옷을 추천드립니다.
+어머님께서 카라 없는 옷을 입으실 경우 목걸이나 스카프 등을 준비해주시면 좋습니다.
+의상이 고민되시면 촬영 날 한두 벌 챙겨오신 뒤 함께 상의 후 결정하셔도 됩니다.
+여성분들은 헤어·메이크업을 평소 외출 시보다 신경 써주시길 바랍니다.
+남성분들도 선크림이나 비비크림을 살짝 발라주시면 더욱 좋습니다.`;
+const D_GROWTH=`*
+촬영의상은 직접 준비해주시면 됩니다.
+가족촬영 의상은 전체적인 조화가 가장 중요합니다.
+패턴이 강렬한 의상이나 큰 로고가 들어간 옷은 인물보다 의상이 부각되어 추천드리지 않으며,
+단정하고 깔끔한 의상을 추천드립니다.
+
+컬러 톤을 섞어 준비하신다면
+체격이 있는 분은 진한 색, 마른 체형의 분은 밝은 색이 잘 어울립니다.
+부모님은 심플하게, 아이는 포인트 있게 코디하셔도 좋습니다.
+의상이 고민되시면 촬영 날 한두 벌 챙겨오신 뒤 함께 상의 후 결정하셔도 됩니다.
+
+미취학 아이들은 스튜디오에서 옷을 갈아입는 걸 힘들어 하는 경우가 많으니
+아이 촬영 의상은 미리 착용하고 오시는 것을 추천드립니다.`;
+const D_KIDS=`*
+촬영의상은 직접 준비해주시면 됩니다.
+패턴이 강렬한 의상이나 큰 로고가 들어간 옷보다
+단정하고 깔끔한 의상을 추천드립니다.
+
+미취학 아이들은 스튜디오에서 옷을 갈아입는 걸 힘들어 하는 경우가 많으니
+아이 촬영 의상은 미리 착용하고 오시는 것을 추천드립니다.
+신발은 신고 촬영할 수도 있고 맨발로 촬영할 수도 있습니다.
+(신발을 준비하시는 경우 깨끗한 상태여야 사용 가능합니다.)`;
+const D_PROFILE=`*
+촬영의상은 직접 준비해주시면 됩니다.
+패턴이 강렬한 의상이나 큰 로고가 들어간 옷보다
+단정하고 깔끔한 의상을 추천드립니다.
+
+헤어·메이크업은 평소 외출 시보다 신경 써주시길 바랍니다.
+남성분들도 선크림이나 비비크림을 살짝 발라주시면 더욱 좋습니다.
+
+신발은 신고 촬영할 수도 있고 맨발로 촬영할 수도 있습니다.
+(신발을 준비하시는 경우 깨끗한 상태여야 사용 가능합니다.)`;
+const D_JANGSU=`*
+촬영의상은 직접 준비해주시면 됩니다.
+패턴이 강렬한 의상이나 큰 로고가 들어간 옷보다 단정하고 깔끔한 의상을 추천드립니다.
+진한 색상에 카라가 있는 옷을 추천드립니다.
+어머님께서 카라 없는 옷을 입으실 경우 목걸이나 스카프 등을 준비해주시면 좋습니다.
+
+헤어·메이크업은 평소 외출 시보다 신경 써주시길 바랍니다.
+남성분들도 선크림이나 비비크림을 살짝 발라주시면 더욱 좋습니다.
+
+신발은 신고 촬영할 수도 있고 맨발로 촬영할 수도 있습니다.
+(신발을 준비하시는 경우 깨끗한 상태여야 사용 가능합니다.)`;
+
+/* 가족성장 전용 취소 규정 (통합관리 원문) */
+const GROWTH_CANCEL_WF=`*
+★★★★★ 꼭 체크 부탁드립니다! ★★★★★
+예약취소는 예약금 입금일로부터 3일 이내 100% 환불 가능합니다.
+이후에는 날짜 변경만 가능합니다.
+
+촬영날짜 변경은 1회에 한해 가능합니다.
+날짜 변경 시 촬영 유효기간은 첫 예약일로부터 6개월입니다.
+기간 내 촬영이 이루어져야 하니 꼭 확인 부탁드립니다.
+
+- 평일 변경: 촬영일 5일 전까지 (예: 수요일 촬영 → 그 전 주 금요일까지)
+- 토요일·공휴일 변경: 촬영일 2주 전 토요일까지
+
+★★★ 촬영 당일 날짜 변경은 어떠한 경우라도 불가하며, 예약금은 환불되지 않습니다. ★★★`;
+
+/* 대가족 → 원본 포함(감탄스토리 전환) 액자별 가격 안내 */
+function storyBase(adults,kids){
+  const P=PRODUCTS.story;
+  return P.base + Math.max(0,adults-2)*P.adultAdd + Math.max(0,kids)*P.kidAdd;
+}
+function upgradeTable(adults,kids){
+  const base=storyBase(adults,kids);
+  const tot=adults+kids;
+  const rate=DISCOUNT.bigFrames;
+  const half=v=>Math.round(v*(100-rate)/100);
+  const lines=[`- 8x10인치 액자 1개 + 원본 : ${won(base)}원`];
+  PRICE_META.filter(m=>m.big).forEach(m=>{
+    const nm=m.inch ? `${m.label.replace('×','x')} (${m.inch})` : m.label.replace('×','x');
+    lines.push(`- 8x10인치 + ${nm} + 원본 : ${won(base+half(PRICE[m.k]))}원`);
+  });
+  return `+
+[ 원본 파일까지 함께 받고 싶으신 경우 ]
+
+대가족 촬영은 가장 잘 나온 액자컷 한 장으로 정리되는 상품이라
+원본 파일은 따로 나가지 않습니다.
+
+저희는 가만히 앉아만 있는 촬영이 아니라
+가족분들 성향에 맞춰 여러 컨셉으로 다이나믹하게 담아드려요.
+액자는 그중 가장 좋은 한 장면이지만,
+원본에는 그날 가족의 여러 모습이 다 남습니다^^
+
+원본을 받아두시면 핸드폰 배경화면으로도 쓰시고,
+가족 단체방에도 올리시고,
+몇 년 지나 다시 꺼내보시는 분들이 많으세요~
+
+원본까지 함께 받길 원하시면 감탄스토리로 진행하시면 됩니다.
+(원본 100컷 이상 · 2000x3000픽셀)
+
+${tot}인 가족 기준 감탄스토리 금액입니다.
+${lines.join('\n')}
+
+지금 미리 정하지 않으셔도 됩니다.
+일단 편하게 오셔서 촬영하시고,
+사진 보신 뒤에 천천히 결정하셔도 돼요^^
+
+※ 원본 없이 8x10인치 액자 1개만 원하시면 대가족(${won(PRODUCTS.bigfam.base)}원) 그대로 진행하시면 됩니다.`;
+}
+
+function dressOf(prod, hasKids){
+  if(prod==='story')   return hasKids?D_STORY_KID:D_STORY_NOKID;
+  if(prod==='simpfam') return hasKids?D_STORY_KID:D_STORY_NOKID;
+  if(prod==='bigfam')  return hasKids?D_BIG_KID:D_BIG_NOKID;
+  if(prod==='growth')  return D_GROWTH;
+  if(prod==='kids')    return D_KIDS;
+  if(prod==='profile') return D_PROFILE;
+  if(prod==='jangsu')  return D_JANGSU;
+  return '';
+}
+function productInfoOf(prod, tot, kidName){
+  if(prod==='story') return `*
+${tot}인 감탄스토리 가족촬영
+의상 1벌 (직접 준비해주시면 됩니다.)
+8x10인치 액자 1개
+(액자컷 수정 파일 1600x2000픽셀 크기로 추후 제공)
+원본 100컷 이상 (2000x3000픽셀)`;
+  if(prod==='simpfam') return `*
+${tot}인 감탄 심플패밀리 가족촬영
+의상 1벌 (직접 준비해주시면 됩니다.)
+5x7인치 액자 1개
+(액자컷 수정 파일 1200x1800픽셀 크기로 추후 제공)
+원본 30컷 이상 (1400x2100픽셀)`;
+  if(prod==='bigfam') return `*
+${tot}인 대가족 촬영
+의상 1벌 (직접 준비해주시면 됩니다. 2벌 준비 시 함께 상의해드립니다.)
+8x10인치 액자 1개
+(액자컷 보정 파일 1600x2000픽셀 크기로 추후 제공)
+원본 파일은 제공되지 않습니다.`;
+  if(prod==='growth') return `★★★ 해당 촬영은 직계 소가족 촬영으로만 진행됩니다. ★★★
+
+*
+${tot}인 가족촬영 + ${kidName}
+의상 1벌 (직접 준비해주시면 됩니다.)
+매년 촬영 시 8x10인치 액자 1개 제공
+(액자컷 수정 파일도 카톡으로 추후 제공 / 원본보다 작은 파일)
+전체 원본 파일 기본 제공 (2000x3000픽셀)
+
+*
+매년 촬영 후 다음 해 촬영 예약금을 결제해주시면 됩니다.
+
+※ 불가피한 사정으로 프로젝트 중단 시,
+예약금은 마지막 촬영 회차의 아이 사진 촬영 금액으로 대체되어 환불되지 않습니다.`;
+  if(prod==='kids') return `*
+키즈 프로필촬영 (아이 ${tot}인)
+의상 1벌 (직접 준비해주시면 됩니다.)
+5x7인치 액자 1개
+(액자컷 수정 파일 1400x2100픽셀 크기로 추후 제공)
+원본 50컷 이상`;
+  if(prod==='profile') return `*
+프로필촬영 (성인 1인)
+의상 1벌 (직접 준비해주시면 됩니다.)
+수정컷 파일 1200x1800픽셀 크기로 제공
+
+++++++++++++++++++++++++++++++++
+촬영된 원본은 판매하지 않습니다.
+기본 액자 외 액자 또는 앨범 추가 시 추가 금액이 발생합니다.
+++++++++++++++++++++++++++++++++`;
+  if(prod==='jangsu') return `*
+부모님 장수 프로필촬영 (성인 ${tot}인)
+의상 1벌 (직접 준비해주시면 됩니다.)
+11x14인치 액자 1개
+(액자컷 수정 파일 추후 제공)
+원본 파일 포함`;
+  return '*\n증명 · 여권사진 촬영입니다.';
+}
+
+function curProd(){return PRODUCTS[effProd(S.prod,S)];}
+function nm(){return C.name?C.name+'님':'고객님';}
+function kidn(){return C.kid||'아이';}
+function dateKo(){
+  if(!C.date) return '';
+  const d=new Date(C.date+'T12:00:00'); const w=['일','월','화','수','목','금','토'];
+  return `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 ${w[d.getDay()]}요일`;
+}
+function timeKo(){
+  if(!C.time) return '';
+  const [h,m]=C.time.split(':').map(Number);
+  return `${h<12?'오전':'오후'} ${h%12||12}시${m?` ${m}분`:''}`;
+}
+function priceBlock(){
+  const {rows,total}=calc(S.prod);
+  let s=rows.map(r=>`  ${r.plus?(r.amt<0?'- ':'+ '):'  '}${r.label}: ${r.amt<0?'-'+won(-r.amt):(r.plus?'+':'')+won(r.amt)}원`).join('\n');
+  return s+`\n  ───────────────────\n  합계: ${won(total)}원`;
+}
+function choiceText(id){
+  const rows=CH[id]||[];
+  if(!rows.length) return '(액자 추가)';
+  return rows.map(r=>{
+    const size=r.size==='직접입력'?(r.custom||'○○'):r.size;
+    return `- ${size} 액자 ${r.frames||1}개에 들어갈 사진 ${r.photos||r.frames||1}장`;
+  }).join('\n');
+}
+const RESERVE=()=>`+ NOSHOW
+노쇼 방지를 위해 촬영 전 예약금을 받고 있는 점 양해 바랍니다.
+
++ 예약금 ${depositOf(effProd(S.prod,S))} 입금
+  ${ACCT}
+
++ 예약자명과 입금자명은 동일하게 부탁드립니다.
++ 1시간 이내 예약금 미입금 시 예약은 자동 취소됩니다.
+
+*예약변경 & 환불규정*
+- 예약변경은 촬영일 10일 전까지 1회 가능
+- 예약취소는 예약 확정 후 3일까지 전액환불, 이후 예약금 환불 불가
+
+*기타 문의는 카카오채널로 부탁드립니다.
+${KAKAO}`;
+
+const LOCATION=`*
+감탄사진관 위치는 보정동 주민센터 맞은편입니다.
+주소: 경기도 용인시 기흥구 죽전로 39 SJ타워 401호
+주차: 상가 지하 1·2층 (건물 뒤쪽 지하주차장 입구 / 우리은행 건물)`;
+const WAIT=`*
+★★★
+감탄사진관은 별도의 대기 공간이 없습니다.
+예약 시간보다 일찍 오셔도 입장이 어렵습니다.
+5분 전부터 입장 가능하며, 그보다 일찍 오시면 다른 팀과 마주칠 수 있으니
+촬영 시간에 맞춰 방문 부탁드립니다.
+촬영하시는 분들만 스튜디오 입장 가능합니다.`;
+const CANCEL=`*
+★★★★★ 꼭 체크 부탁드립니다! ★★★★★
+예약취소는 예약금 입금일로부터 3일 이내 100% 환불 가능합니다.
+
+촬영날짜 변경은 촬영일 10일 이전, 1회에 한해 (촬영날짜 기준 1개월 이내) 가능합니다.
+(예: 예약일이 8월 5일 → 7월 26일까지 무료 변경 / 8월 6일~9월 5일 중 선택)
+촬영일 10일 이내 날짜 변경 시 수수료 5만원 발생합니다.
+당일 스케줄 변경과 재촬영은 불가합니다.`;
+const SNS=`*
+촬영 사진의 일부는 감탄사진관 SNS (블로그·인스타그램 등)에 업로드될 수 있습니다.
+업로드를 원치 않으시면 촬영 날 말씀해 주시길 부탁드립니다.`;
+const BOTTOM=`*
+궁금하신 점은 카톡 또는 전화로 문의주세요.
+촬영 중에는 카톡 답변이 늦을 수 있으며, 촬영 후 바로 연락드리겠습니다.
+감사합니다.`;
+const GROWTH_DIRECT=`★★★해당 촬영은 직계소가족 촬영으로만 진행됩니다`;
+const GROWTH_STOP=`※불가피한 사정으로 인한 프로젝트 중단시,
+예약금은 마지막촬영 회차의 아이사진촬영 금액으로 대체되어 환불되지 않습니다.`;
+const GROWTH_CANCEL=`★★★★★
+꼭 체크 부탁드립니다!!!
+예약취소는 예약금 입금일로 부터 3일이내 100% 환불 가능합니다.
+이 후는 날짜변경만 가능합니다. 촬영날짜 변경은 1회에 한해 가능하며 재촬영은 불가합니다.
+(날짜 변경시 촬영 유효기간은 첫 예약일로 부터 6개월입니다
+기간내 촬영이 유효하니 이점 꼭 확인부탁드립니다)
+평일의 경우 5일 전(예/ 수요일 촬영의 경우 그 전주 금요일까지)
+토요일이나 공휴일의 경우(토요일 촬영의 경우 예약일의 2주 전 토요일까지)
+까지 연락을 주셔야 하며 그 이후 날짜 변경은 어렵습니다.
+★★★촬영 당일 날짜변경은 어떠한 경우라도 불가하며 예약금은 환불되지 않습니다★★★
+저희 스튜디오는 100%예약제 스튜디오 입니다.
+고객님께서 촬영을 예약을 하시면 저희는 그 시간을 고객님을 위해 완전히 비워둡니다.
+촬영 스케줄은 고객분들과 저희와의 약속이니 꼭 지켜주시길 부탁드립니다.
+★★★★★`;
+const GROWTH_BOTTOM=`촬영에 대해 궁금하신 점은 카톡 또는 전화로 문의주세요.
+저희가 촬영 중일 경우는 카톡 답변이 늦을 수 있습니다.
+촬영을 마치는 대로 연락드리고 있으니 양해 바랍니다.
+감사합니다.`;
+const GROWTH_TERMS=[GROWTH_DIRECT,GROWTH_STOP,GROWTH_CANCEL].join("\n\n");
+
+const CATS=[
+ {k:'flow',   n:'📋 예약 진행 8단계'},
+ {k:'growth', n:'🌱 가족성장 3단계'},
+ {k:'select', n:'📷 사진 셀렉'},
+ {k:'original',n:'💌 원본 발송'},
+ {k:'retouch',n:'🖼 보정본'},
+ {k:'pickup', n:'🛎 액자 완성'},
+ {k:'ship',   n:'📦 택배'},
+ {k:'review', n:'⭐ 리뷰 감사'},
+ {k:'idphoto',n:'🪪 증명사진'},
+ {k:'notice', n:'🔔 입금 · 확인'},
+];
+
+const MSGS={
+flow:[
+ {id:'f1',t:'1. 예약 접수 — 상품 · 견적 안내',kind:'톡',body:()=>{
+   const P=curProd();
+   if(P.growth){
+     const k=Math.max(1,S.kids), fee=P.base+(k-1)*20000;
+     return `안녕하세요~!
+가족성장 프로젝트를 신청해주셔서 감사드립니다 ^^
+
+가족성장 3년 패키지는 예약금 입금 후 촬영 예약을 해주시면 됩니다 ^^
+첫 촬영은 금년 중 희망하시는 날짜와 시간대에 예약해주시면 됩니다~
+
+정리하면,
+${2+k}인 가족촬영 + ${kidn()} 기념촬영 (매년 ${won(fee)}원)
+8x10인치 액자, 전체 원본 제공
+
+촬영 스케줄은 네이버 예약으로 해주시면 됩니다.
+예약 상품은 '감탄스토리'로 선택해주시고,
+메모란에 '가족성장 고객'이라고 적어주시면 됩니다.
+(예약자명이 다를 경우 꼭 예약자 성함도 남겨주세요.)
+상품 가격과 내용은 무시하셔도 됩니다.
+
++ 예약금 10만원 입금으로 가족성장 신청이 확정됩니다.
+  ${ACCT}
+
++ 1시간 이내 예약금 미입금 시 가예약은 자동 취소됩니다.
+
+입금 확인 후 예약확인사항을 보내드립니다.
+더 궁금하신 점이 있으면 편히 문의주세요.
+감사합니다. 좋은 하루 보내세요!`;
+   }
+   if(P.idphoto) return '(증명사진은 네이버 플레이스에서 자동으로 안내가 발송됩니다.)';
+   const tot=S.adults+S.kids;
+   let line=P.name;
+   if(P.adultAdd!==undefined||P.flat) line=`${P.name} ${tot}인 가족촬영`+(S.kids>0?` (성인 ${S.adults}명 / 자녀 ${S.kids}명)`:'');
+   // 대가족은 원본이 없으므로, 예약금 받기 전에 원본 포함(감탄스토리) 가격을 함께 안내한다
+   const upgrade = effProd(S.prod,S)==='bigfam' ? `\n\n${upgradeTable(S.adults,S.kids)}` : '';
+   return `안녕하세요. 감탄사진관입니다~^^
+
+선택하신 상품은
+${line}입니다.${S.pet?'\n(반려동물 포함 / 배변패드·간식을 챙겨주시면 좋습니다)':''}
+
+${priceBlock()}${upgrade}
+
+${RESERVE()}`;
+ }},
+ {id:'f2',t:'2. 입금 확인',kind:'톡',body:()=>
+`예약금 입금 확인했습니다. 감사합니다 ^^
+앞으로 가족사진은 감탄삼촌이 책임지겠습니다!!
+
+이어서 예약 확인사항 보내드릴게요.
+꼼꼼히 읽어보시고 궁금하신 점은 편히 연락주세요^^
+감사합니다 ^^`},
+ {id:'f3',t:'3. 예약 확인사항',kind:'톡',body:()=>{
+   const eff=effProd(S.prod,S), P=PRODUCTS[eff];
+   const a=S.adults, k=S.kids, tot=a+k;
+   const hasKids=k>0;
+   const soyo=eff==='bigfam'?'1~2시간 이내 소요':'1시간 이내 소요';
+
+   if(eff==='id') return '(증명사진은 네이버 플레이스에서 자동으로 안내가 발송됩니다.)';
+
+   const title = eff==='growth'
+     ? '==========▲감탄사진관 가족성장 예약확인사항▲=========='
+     : '==========▲감탄사진관 예약확인사항▲==========';
+
+   let who;
+   if(eff==='growth')       who=`성인 2인 + 아이 ${Math.max(1,k)}인`;
+   else if(eff==='kids')    who=`${kidn()}`;
+   else if(eff==='profile'||eff==='jangsu') who=`성인 ${Math.max(1,a)}인`;
+   else                     who=hasKids?`성인 ${a}인 + 아이 ${k}인`:`성인 ${a}인`;
+   const head=`[ ${nm()}  |  ${who}  |  ${P.name} ]`;
+
+   const when = eff==='growth'
+     ? `첫 촬영은 금년 중 희망하시는 날짜와 시간대로\n네이버 예약을 해주시면 됩니다.\n(방문 후 촬영 완료까지 ${soyo})`
+     : `${dateKo()||'(촬영일 미입력)'}  ${timeKo()}  예약되었습니다.\n(방문 후 촬영 완료까지 ${soyo})`;
+
+   const gKids=Math.max(1,k);
+   const gLabel=gKids>=2?`${kidn()} 기념촬영 / 형제 기념촬영`:`${kidn()} 기념촬영`;
+   const info=productInfoOf(eff, eff==='growth'?(2+gKids):tot, gLabel);
+   const pet = S.pet ? '\n(반려동물 포함 / 배변패드·간식을 챙겨주시면 좋습니다)' : '';
+   const dress=dressOf(eff, hasKids);
+   const cancel = eff==='growth' ? GROWTH_CANCEL_WF : CANCEL;
+   return `${title}
+
+${head}
+${when}
+
+${info}${pet}
+
+${LOCATION}
+
+${dress}
+
+${WAIT}
+
+${cancel}
+
+${SNS}
+
+${BOTTOM}`;
+ }},
+ {id:'f4',t:'4. 원본 발송 (액자 초이스 안내)',kind:'톡',choice:true,pay:true,body:v=>
+`안녕하세요~!
+오늘 촬영 하시느라 수고하셨습니다 :)
+방금 이메일로 원본 보내드렸습니다.
+
+사진 초이스는
+
+${v._choice}
+
+선택하셔서 파일번호 남겨주시면 됩니다!${v._pay}
+
+가족분들 모두 건강 유의하시구요~
+궁금한 점 있으시면 언제든 편하게 말씀 주세요❤️
+감사합니다!`},
+ {id:'f5',t:'5. 리뷰 · 포켓사진 안내',kind:'톡',body:()=>
+`안녕하세요~!
+따뜻한 후기까지 남겨주시고 정말 감사드려요 :)
+포켓사진은 별도로 지정하지 않고 액자컷에 들어가는 사진으로 제작됩니다 :)
+참고 부탁드릴게요!
+감사합니다!`},
+ {id:'f6',t:'6. 사진 선택 확인',kind:'톡',body:()=>
+`고객님, 사진 선택 확인했습니다 ^^
+선택해주신 사진으로 보정 진행할게요~
+액자는 4주 정도 소요될 예정이에요.
+
+예쁘게 완성 후 다시 연락드리겠습니다.
+감사합니다!`},
+ {id:'f7',t:'7. 액자 완성 · 수령 안내',kind:'톡',body:()=>
+`안녕하세요, ${nm()}~!
+액자가 예쁘게 완성되어 연락 드렸습니다 :)
+
+시간 되실 때 방문 수령 해주시면 됩니다~
+저희는 매주 화요일과 수요일은 정기 휴무이니,
+이 날만 피해 방문 해주시면 감사하겠습니다.
+
+혹시라도 방문이 어려우시다면 택배비 입금 후 택배 발송 가능합니다.
+원하시면 ${ACCT} 으로 입금 후 (로젠택배 7,000원)
+주소 부탁드립니다.
+
+방문 전 미리 전화나 문자 남겨 주시면,
+바로 찾아 가실 수 있도록 준비해 놓겠습니다❣️
+감사합니다!`},
+ {id:'f8',t:'8. 보정본 발송',kind:'톡',body:()=>
+`안녕하세요, ${nm()}!^^
+찾아가신 액자컷 보정본 파일 보내드립니다 :)
+
+파일 확인해주시고 수정이 필요하신 부분이 있으면 편히 말씀해주세요.
+
+이번 촬영 즐거우셨길 바랍니다!
+앞으로도 좋은 순간들 함께 담아드릴 수 있으면 좋겠습니다 ^^
+감사합니다!`},
+],
+
+growth:[
+ {id:'g1',t:'1. 예약금 입금 안내',kind:'문자',body:()=>{
+   const k=Math.max(1,S.kids), fee=150000+(k-1)*20000;
+   const line=k===1?`${2+k}인 가족촬영+아이촬영 (매년 ${fee/10000}만원)`
+                   :`${2+k}인 가족촬영+아이촬영 (자녀 ${k}명, 매년 ${fee/10000}만원)`;
+   return `안녕하세요~
+${C.name?C.name+'님 ':''}가족성장 촬영을 신청해주셔서 감사드립니다^^
+
+가족성장 3년패키지는 예약금 입금을 해주신 후
+촬영예약을 해주시면 됩니다^^
+
+첫 촬영은 금년 중 희망하시는 날짜와 시간대에 예약해주시면 됩니다~
+
+정리해서 말씀드리면,
+${line}
+8x10인치 액자,
+전체원본
+
+ex) 자녀가 2명일 경우 1년 촬영 금액은 17만입니다
+
+예약금이 입금되면 가족성장 신청이 확정됩니다.
+기업은행 635-057095-01-019 김시현(감탄)으로
+10만원 입금 부탁드립니다.
+(1시간 이내에 입금을 부탁드립니다.
+이후 가예약은 자동 취소되며 개별 연락 드리지 않습니다.)
+
+촬영 스케줄은 네이버예약으로 해주시면 됩니다.
+예약 상품은 감탄스토리로 해주시고, 메모란에 "가족성장 고객"이라고 적어주세요.
+가족성장 상품은 일회성이라 네이버에 등록되어 있지 않아, 가장 비슷한 상품으로 예약하시면 됩니다. (상품 가격·내용은 무시하셔도 됩니다^^)
+
+예약금 입금이 확인되면 "예약확인사항"을 보내드립니다.
+더 궁금하신 점이 있으면 문의주세요.
+감사합니다. 좋은 하루 보내세요!!`;
+ }},
+ {id:'g2',t:'2. 입금 확인',kind:'문자',body:()=>
+`예약금 입금 확인했습니다 감사합니다 ^^
+앞으로 가족사진은 감탄삼촌이 책임지겠습니다!!
+
+아래에 가족성장프로젝트 예약 안내사항 보내드려요.
+꼼꼼히 읽어보시고 궁금하신 점은 편히 연락주세요^^
+감사합니다 ^^`},
+ {id:'g3',t:'3. 예약 안내사항',kind:'문자',body:()=>{
+   const k=Math.max(1,S.kids);
+   const kl=k>=2?`${kidn()}기념사진 / 형제기념사진`:`${kidn()}기념사진`;
+   return `▲감탄사진관 가족성장사진 3년 프로젝트 예약확인사항▲
+
+${GROWTH_DIRECT}
+
+[${C.name||'○○○'}님 ${2+k}인 가족 - "3년" 가족성장사진프로젝트]
+*
+${2+k}인 가족촬영+${kl}
+의상 1벌(직접 준비해주시면 됩니다),
+매년 촬영시 8x10액자-1개,
+(액자에 들어가는 사진의 수정컷 파일도 카톡으로 추후 제공되며
+다만 이파일은 원본크기보다 작은 파일입니다)
+전체 원본파일은 기본제공 됩니다.
++
+매년 촬영 후 다음 해의 촬영 예약금을 결제해주시면 됩니다.
+
+${GROWTH_STOP}
+*
+${GROWTH_CANCEL}
+*
+${GROWTH_BOTTOM}`;
+ }},
+],
+
+select:[
+ {id:'s1',t:'기본',kind:'톡',body:()=>
+`안녕하세요~!
+사진 선택 확인 되었습니다
+액자는 4주 정도 소요될 예정이에요~
+예쁘게 완성 후 다시 문자 드리겠습니다❤️
+즐거운 하루 되세요~
+감사합니다!`},
+ {id:'s2',t:'리뷰 남긴 경우 (포켓사진 포함)',kind:'톡',body:()=>
+`안녕하세요~! 
+사진 선택 확인되었습니다^^ 
+액자는 4주 정도 소요될 예정이에요~
+따뜻한 리뷰 또한 감사드립니다❤️ 
+포켓사진과 함께 예쁘게 완성 후 
+다시 문자 드리겠습니다~ 
+즐거운 한 주 되세요~ 
+감사합니다`},
+ {id:'s3',t:'순차 작업 안내',kind:'톡',body:()=>
+`안녕하세요~
+사진 확인 했습니다^^
+액자는 순차적으로 직접 작업을 하고 있어 평균 4주정도 소요될 예정이에요~
+이쁘게 완성후 다시 연락 드리겠습니다!
+감사합니다^^`},
+ {id:'s4',t:'포켓사진 안내 (합성 요청 있음)',kind:'톡',body:()=>
+`안녕하세요~!
+사진 선택 확인 되었습니다
+따뜻한 후기까지 남겨주시고 정말 감사드려요 :)
+포켓사진은 별도로 지정하지 않고 액자컷에 들어가는 사진으로 제작됩니다 :)
+참고 부탁드릴게요!
+말씀하신대로 합성 후 이쁘게 액자 완성하도록 하겠습니다 :)
+액자는 4주 정도 소요될 예정이에요~
+그럼 이쁘게 액자 완성후 다시 연락 나누겠습니다❤️
+오늘도 즐거운 하루 되세요~
+감사합니다!`},
+ {id:'s5',t:'매년 오시는 분 (재예약 안내)',kind:'톡',
+  fields:[{k:'honor',label:'호칭',ph:'다윤이 어머님'}],body:v=>
+`안녕하세요~ ${v.honor||'○○ 어머님'} 잘 지내시죠^^  
+아이를 키우다 보면 시간이 정말 빠르게 지나더라고요 ㅎㅎ
+
+네네, 액자 이쁘게 완성되면 연락드릴게요~ 
+
+올해 촬영 때도 이쁘게 찍어드릴게요
+시간 보시고 네이버로 예약 주세요~😊`},
+],
+
+original:[
+ {id:'o1',t:'원본 발송 (카톡)',kind:'톡',choice:true,pay:true,body:v=>
+`안녕하세요~!
+오늘 촬영 하시느라 수고하셨습니다 :)
+방금 이메일로 원본 보내드렸습니다.
+
+사진 초이스는
+
+${v._choice}
+
+선택하셔서 파일번호 남겨주시면 됩니다!${v._pay}
+
+가족분들 모두 건강 유의하시구요~
+궁금한 점 있으시면 언제든 편하게 말씀 주세요❤️
+감사합니다!`},
+ {id:'o2',t:'원본 발송 (이메일)',kind:'메일',choice:true,body:v=>
+`안녕하세요 :)
+촬영하신 사진 원본 메일로 보내드렸습니다
+
+다운 받으시고 꼭! 백업 부탁 드려요
+
+ 사진 초이스는
+
+${v._choice}
+ 선택하셔서 톡에 파일번호 남겨주시면 됩니다!
+
+가족분들 모두 건강 유의하시구요~
+궁금한 점 있으시면 언제든 편하게 말씀 주세요❤️
+감사합니다!`},
+ {id:'o3',t:'원본 발송 (리뷰 남긴 경우)',kind:'톡',choice:true,body:v=>
+`안녕하세요~!
+오늘 촬영 하시느라 수고하셨습니다 :)
+따뜻한 후기까지 남겨주셔서 정말 감사드려요~
+방금 이메일로 원본 보내드렸습니다.
+
+사진 초이스는
+
+${v._choice}
+
+선택하셔서 파일번호 남겨주시면 됩니다!
+
+가족분들 모두 건강 유의하시구요~
+궁금한 점 있으시면 언제든 편하게 말씀 주세요❤️
+감사합니다!`},
+],
+
+retouch:[
+ {id:'r0',t:'보정본 확인하러 방문 안내',kind:'톡',
+  fields:[{k:'honor',label:'호칭',ph:'다영'}],body:v=>
+`안녕하세요~! ${v.honor||'○○'}님 가족액자 보정본이 완성되서 연락드렸습니다☺️ 보정본은 저희 사진관에서 같이 확인을 하고 있습니다. 방문 가능하신 날짜와 시간대를 말씀해주시면 스케줄 확인 도와드릴게요~ 저희 사진관에서 보정본 확인을 하신 후에 액자 제작이 진행되고 사진관으로 완성본이 오는데까지는 평균 7~14일정도 소요됩니다. 참고 부탁드리구요‼️ 방문 가능하신 날짜 말씀 부탁 드릴게요💕 감사합니다!`},
+ {id:'r1',t:'방금 찾아가심',kind:'톡',
+  fields:[{k:'who',label:'수령인',type:'select',options:['어머님','아버님','고객님'],def:'어머님'}],body:v=>
+`안녕하세요 !^^
+방금 ${v.who||'어머님'} 께서 액자 찾아 가셨습니다.
+찾아가신 액자컷 보정본 파일 보내드립니다 :)
+가족분들 모두 건강 유의하시구요~
+다음 기회에 다시 만나 뵙길 바랄게요❤️
+감사합니다!`},
+ {id:'r2',t:'이메일로 발송',kind:'메일',body:()=>
+`안녕하세요~!
+찾아가신 액자컷 보정본 파일 이메일 통해 보내 드렸습니다 :)
+가족분들 모두 건강 유의하시구요~
+다음 기회에 다시 만나 뵙길 바랄게요❤️
+감사합니다!`},
+ {id:'r3',t:'어제 찾아가심',kind:'톡',body:()=>
+`안녕하세요~!
+어제 찾아가신 액자컷 보정본 파일 보내드립니다^^
+가족분들 모두 건강 유의하시구요~
+다음에 또 뵙기를 바라요~ 
+감사합니다^^`},
+ {id:'r4',t:'네이버 톡톡 (메일 발송)',kind:'톡톡',body:()=>
+`안녕하세요~!
+찾아가신 액자컷 보정본 파일 메일로 보내드렸습니다 :)
+가족분들 모두 건강 유의하시구요~
+다음 기회에 다시 만나 뵙길 바랄게요❤️
+감사합니다!`},
+ {id:'r5',t:'집으로 배송 완료',kind:'톡',body:()=>
+`안녕하세요~^^
+방금 집으로 배송 완료 했습니다~
+액자컷 보정본 보내드립니다.
+가족분들 모두 건강 유의하시구요~
+다음 기회에 다시 만나 뵙길 바랄게요❤️
+감사합니다!^^`},
+ {id:'r6',t:'늦게 보낼 때 (사과)',kind:'톡',body:()=>
+`안녕하세요~!
+어제 정신이 없어 보정본을 못 보내드렸어요~
+죄송합니다 ^^;
+
+어제 찾아가신 액자컷 보정본과 추가 보정본 파일 보내드립니다
+가족분들 모두 건강 유의하시구요~
+다음 기회에 다시 만나 뵙길 바랄게요❤️
+감사합니다!`},
+],
+
+pickup:[
+ {id:'k1',t:'기본 8×10 (방문 수령 + 택배 안내)',kind:'톡',body:()=>
+`안녕하세요~!
+액자가 예쁘게 완성되어 연락 드렸습니다 :)
+시간 되실 때 방문 수령 해주시면 됩니다~
+
+저희는 매주 화요일과 수요일은 정기 휴무이니,
+이 날만 피해 방문 해주시면 감사하겠습니다.
+
+혹시라도 방문이 어려우시다면 택배비 입금 후 택배 발송 가능합니다.
+원하시면 ${ACCT} 으로 입금 후 (로젠택배 7,000원) 
+주소 부탁드립니다.
+
+방문 전 미리 전화나 문자 남겨 주시면,
+바로 찾아 가실 수 있도록 준비해 놓겠습니다❣️
+감사합니다!`},
+ {id:'k2',t:'큰 액자 · 앨범 (휴무 직접입력)',kind:'톡',
+  fields:[{k:'off',label:'휴무 안내 (없으면 비움)',ph:'이번주 일~수 개인 일정으로 휴무'}],body:v=>
+`안녕하세요~!
+가족 액자가 예쁘게 완성되어 연락드렸습니다 :)
+시간 되실 때 방문 수령 해주시면 됩니다~
+${v.off?`\n${v.off} 이 날 피해서 방문 해주시면 감사드리겠습니다.\n`:''}
+방문 전 미리 전화나 문자 남겨 주시면,
+바로 찾으실 수 있도록 준비해 놓겠습니다❣️
+감사합니다!`},
+],
+
+ship:[
+ {id:'p1',t:'기본 발송',kind:'톡',body:()=>
+`안녕하세요~
+오늘 안전하게 포장해서 로젠택배로 발송해 드렸습니다 :)
+안전하게 포장 했지만 혹시라도 택배 받으시고 액자에 문제가 있으면 언제든지 말씀 부탁 드릴게요~
+그리고 오늘 상품 보내드린 보정본 파일은 지금 보내드렸습니다!
+
+가족분들 모두 건강 유의하시구요~
+다음 기회에 다시 만나 뵙길 바랄게요❤️
+감사합니다!`},
+ {id:'p2',t:'모레 도착 + 액자 추가비 입금',kind:'톡',
+  fields:[{k:'size',label:'추가 액자',ph:'5x10'},{k:'amt',label:'금액',ph:'50,000'}],body:v=>
+`안녕하세요~
+오늘 로젠택배로 접수 되어,모레 도착 예정입니다^^
+안전하게 포장 했지만 혹시라도 택배 받으시고 액자에 문제가 있으면 언제든지 말씀 부탁 드릴게요~
+그리고 오늘 상품 보내드린 보정본 파일은 지금 보내드렸습니다!
+
+액자 추가(${v.size||'○○'}) ${v.amt||'○○,000'} ${ACCT} 으로 입금 해주시면 감사하겠습니다^^.
+
+가족분들 모두 건강 유의하시구요~
+다음 기회에 다시 만나 뵙길 바랄게요❤️
+감사합니다!`},
+ {id:'p3',t:'큰 액자 따로 + 작은 액자 · 앨범 같이',kind:'톡',body:()=>
+`안녕하세요~
+큰 액자는 지난주 금요일에 액자 공방에서
+택배 발송 되었고 앨범과 작은액자와 포켓사진은 
+오늘 안전하게 포장해서 로젠택배로 발송해 드렸습니다 :)
+안전하게 포장 했지만 혹시라도 택배 받으시고 액자에 문제가 있으면 언제든지 말씀 부탁 드릴게요~
+그리고 오늘 상품 보내드린 보정본 파일은 지금 보내드렸습니다!
+가족분들 모두 건강 유의하시구요~
+다음 기회에 다시 만나 뵙길 바랄게요❤️
+감사합니다!`},
+],
+
+review:[
+ {id:'v1',t:'기본',kind:'톡',body:()=>
+`안녕하세요~!
+따뜻한 후기까지 남겨주셔서 정말 감사드려요 :)
+기분 좋으셨다니 저희도 오늘 반가웠고, 아이 웃음 덕분에 촬영 내내 즐거웠어요!
+추운 날씨 따뜻한 하루 보내시고 
+다음 기회에 다시 만나 뵙길 바랄게요❤️
+감사합니다!`},
+ {id:'v2',t:'또 오신 분',kind:'톡',body:()=>
+`안녕하세요~!
+따뜻한 후기까지 남겨주셔서 정말 감사드려요 :)
+와~ 또 하나의 예쁜 추억 남기려고 타이밍이 딱 맞았나봐요 :-)
+기분 좋으셨다니 저희도 오늘 반가웠고, 아이 웃음 덕분에 촬영 내내 즐거웠어요!
+추운 날씨 따뜻한 하루 보내시고 
+다음 기회에 다시 만나 뵙길 바랄게요❤️
+감사합니다!`},
+],
+
+idphoto:[
+ {id:'i1',t:'증명 웹용 파일 발송',kind:'톡',body:()=>
+`안녕하세요~!
+촬영하신 사진 웹용 파일 보내드립니다 :)
+(저희가 무료로 제공해드리는 파일은 인터넷 제출용 웹용 파일입니다.
+고화질 파일이 필요하신 경우 추가로 구입하실 수 있습니다.)
+감사합니다!
+${INSTA}`},
+],
+
+notice:[
+ {id:'n1',t:'입금 미확인 안내',kind:'톡',body:()=>
+`안녕하세요, 입금 확인 이 되지 않아 연락 드립니다. 
+혹시 다른 이름 으로 넣으셨을수도 있으셔서`},
+ {id:'n2',t:'리뷰 영수증 확인 안 됨',kind:'톡',body:()=>
+`네이버예약으로 해주셨을 경우 대부분 네이버 이용후기로 작성을 해주시는데 영수증 리뷰로 작성을 해주셔서 네이버 전산에서는 확인이 안되었던것 같습니다^^;
+번거롭게 해드려 죄송합니다~
+아이들 사진이 이뻐 리뷰와 상관없이 뽑았는데 두번 걸음 하시지 않아 다행입니다~
+다음 증명 촬영때도 자연스럽게 촬영진행 도와드릴게요❤️
+감사합니다!`},
+],
+};
+
+let curCat='flow';
+function buildBody(m){
+  const v=Object.assign({},MV[m.id]||{});
+  if(m.choice) v._choice=choiceText(m.id);
+  if(m.pay){
+    const s=MV[m.id]||{};
+    v._pay=s._payOn?`\n\n${s._payName||'○○'} 추가 촬영 ${s._payAmt||'○○,000'}은 이 계좌${ACCT}으로 보내주시면 감사하겠습니다^^`:'';
+  }
+  return m.body(v);
+}
+function renderCats(){
+  $('#msgcats').innerHTML=CATS.map(c=>
+    `<button data-gcat="${c.k}" class="${c.k===curCat?'on':''}">${c.n}</button>`).join('');
+}
+function fieldHtml(mid,f){
+  const cur=(MV[mid]||{})[f.k]??f.def??'';
+  if(f.type==='select') return `<div class="f"><label>${f.label}</label><select data-gmf="${mid}|${f.k}">
+    ${f.options.map(o=>`<option ${o===cur?'selected':''}>${o}</option>`).join('')}</select></div>`;
+  return `<div class="f"><label>${f.label}</label><input data-gmf="${mid}|${f.k}"
+    value="${String(cur).replace(/"/g,'&quot;')}" placeholder="${f.ph||''}"></div>`;
+}
+function choiceHtml(mid){
+  if(!CH[mid]) CH[mid]=[{size:'8x10인치',frames:1,photos:1,custom:''}];
+  const rows=CH[mid].map((r,i)=>`<div class="crow">
+    <select data-gch="${mid}|${i}|size">${SIZES.map(s=>`<option ${s===r.size?'selected':''}>${s}</option>`).join('')}</select>
+    ${r.size==='직접입력'?`<input type="text" style="width:auto;flex:1;text-align:left" placeholder="크기 입력" value="${(r.custom||'').replace(/"/g,'&quot;')}" data-gch="${mid}|${i}|custom">`:''}
+    <input type="number" min="1" value="${r.frames}" data-gch="${mid}|${i}|frames" title="액자 개수">
+    <span class="x">개 /</span>
+    <input type="number" min="1" value="${r.photos}" data-gch="${mid}|${i}|photos" title="사진 장수">
+    <span class="x">장</span>
+    <button class="del" data-gchdel="${mid}|${i}">×</button></div>`).join('');
+  return `<div class="choice"><div class="choice-l">🖼 액자 초이스 — 크기 · 개수 · 장수</div>
+    ${rows}<button class="addrow" data-gchadd="${mid}">+ 액자 추가</button></div>`;
+}
+function payHtml(mid){
+  const s=MV[mid]||{};
+  return `<div class="row" style="border:0;padding:6px 0 10px">
+    <div class="rl"><b style="font-size:12.5px">추가 촬영비 입금 안내 넣기</b></div>
+    <label class="sw"><input type="checkbox" data-gmf="${mid}|_payOn" ${s._payOn?'checked':''}><span class="sl"></span></label></div>
+    ${s._payOn?`<div class="fields" style="margin-bottom:10px">
+      <div class="f"><label>대상 이름</label><input data-gmf="${mid}|_payName" value="${(s._payName||'').replace(/"/g,'&quot;')}" placeholder="은재"></div>
+      <div class="f"><label>금액</label><input data-gmf="${mid}|_payAmt" value="${(s._payAmt||'').replace(/"/g,'&quot;')}" placeholder="50,000"></div>
+    </div>`:''}`;
+}
+function kindCls(k){return k==='메일'?'mail':(k==='문자'?'talk':'')}
+function renderMsgs(filterIds){
+  const list=MSGS[curCat]||[];
+  $('#msglist').innerHTML=list.map(m=>{
+    const hide=filterIds&&!filterIds.includes(m.id)?' hide':'';
+    const fields=(m.fields||[]).map(f=>fieldHtml(m.id,f)).join('');
+    return `<div class="msg${hide}" id="msg-${m.id}">
+      <div class="msg-h">
+        <div class="msg-t">${m.t}<span class="kind ${kindCls(m.kind)}">${m.kind}</span></div>
+        <div class="btns">
+          <button class="btn alt" data-gsms="${m.id}">문자앱</button>
+          <button class="btn" data-gcopy="${m.id}">복사</button>
+        </div>
+      </div>
+      ${fields?`<div class="fields" style="margin-bottom:10px">${fields}</div>`:''}
+      ${m.choice?choiceHtml(m.id):''}
+      ${m.pay?payHtml(m.id):''}
+      <textarea class="ta" id="ta-${m.id}"></textarea>
+      <div class="hint">↑ 여기서 직접 고친 뒤 복사할 수 있어요</div>
+    </div>`;
+  }).join('');
+  list.forEach(m=>{
+    const el=$('#ta-'+m.id); if(!el) return;
+    el.value=buildBody(m); grow(el);
+  });
+  $$('[data-sms]').forEach(b=>{ if(!C.phone) b.disabled=true; });
+}
+function grow(el){el.style.height='auto';el.style.height=(el.scrollHeight+2)+'px';}
+function refreshMsg(mid){
+  const m=(MSGS[curCat]||[]).find(x=>x.id===mid); if(!m) return;
+  const el=$('#ta-'+mid); if(el){el.value=buildBody(m);grow(el);}
+}
+function refreshAllMsgs(){(MSGS[curCat]||[]).forEach(m=>refreshMsg(m.id));}
+
+/* ============================================================
+   가격 설정
+   ============================================================ */
+function renderPriceTab(){
+  $('#conflictBox').innerHTML=`<b>확인이 필요한 것</b>
+    <ul>
+      <li><b>가족성장</b> — 자녀 1명당 +2만 (문자도구 기준)으로 계산 중입니다. 통합관리는 15만 고정이었어요.</li>
+    </ul>`;
+  $('#ptbody').innerHTML=PRICE_META.map(m=>{
+    const tags=(m.big?'<span class="badge-unset">큰 액자 · 50% 할인</span>':'')
+      +(m.disc?'':'<span class="badge-unset">정가</span>');
+    return `<tr><td>${m.label}${tags}</td>
+    <td class="r"><input type="number" min="0" step="1000" data-gprice="${m.k}" value="${PRICE[m.k]||''}"
+      placeholder="0" class="${PRICE[m.k]<=0?'unset':''}"></td></tr>`;
+  }).join('');
+  $('#dtbody').innerHTML=DISCOUNT_META.map(m=>`<tr>
+    <td>${m.label}</td>
+    <td class="r"><input type="number" min="0" max="100" step="5" data-gdisc="${m.k}" value="${DISCOUNT[m.k]||''}"
+      placeholder="0" class="${DISCOUNT[m.k]<=0?'unset':''}"></td></tr>`).join('');
+}
+
+
+
+/* ---- 이 모듈 전용 (CRM 전역과 절대 안 섞임) ---- */
 function renderAll(){ renderProds(); renderOpts(); renderExtras(); renderQuote(); }
+function syncExpand(){
+  const s=$$('.step'), all=s.length&&s.every(x=>x.classList.contains('open'));
+  const b=$('#expand'); if(b) b.textContent=all?'전체 접기':'전체 펼치기';
+}
+
+/* ---- 패널 탭 ---- */
+const GTABS=[{k:'quote',n:'견적'},{k:'msg',n:'문자'},{k:'script',n:'상담'},{k:'price',n:'가격'}];
+let gTab='quote';
+function renderGTabs(){
+  const t=$('#gc-tabs'); if(!t) return;
+  t.innerHTML=GTABS.map(x=>`<button class="tab ${x.k===gTab?'on':''}" data-gtab="${x.k}">${x.n}</button>`).join('');
+  GTABS.forEach(x=>{ const p=$('#gp-'+x.k); if(p) p.style.display = x.k===gTab?'block':'none'; });
+}
+function goGTab(k){
+  gTab=k; renderGTabs();
+  if(k==='quote') renderAll();
+  if(k==='msg') renderMsgs();
+  if(k==='price') renderPriceTab();
+  const b=$('#gc-body'); if(b) b.scrollTop=0;
+}
 
 /* ---- 열고 닫기 ---- */
-let opened=false;
+let inited=false;
 function gcOpen(){
   document.getElementById('gc-wrap').classList.add('on');
   document.getElementById('gc-dim').classList.add('on');
-  if(!opened){ opened=true; }
-  renderAll();
+  if(!inited){
+    inited=true;
+    renderScript(); renderCats();
+    C.time='11:00';
+    const t=new Date().toISOString().slice(0,10);
+    if($('#c_date')) $('#c_date').value=t;
+    C.date=t;
+  }
+  renderGTabs(); renderAll();
 }
 function gcClose(){
   document.getElementById('gc-wrap').classList.remove('on');
   document.getElementById('gc-dim').classList.remove('on');
 }
 window.openQuoteConsole=gcOpen;
+console.log('%c감탄 콘솔 v3 로드됨 (견적·문자·상담·가격)','background:#4f46e5;color:#fff;padding:2px 6px;border-radius:3px');
 
-/* ---- 이벤트 (패널 안에서만 반응) ---- */
+/* ---- 이벤트: 패널 안에서만 반응 ---- */
 document.addEventListener('click',e=>{
   const t=e.target;
   if(t.closest('#gc-close')||t.id==='gc-dim'){ gcClose(); return; }
   if(!t.closest('#gc-root')) return;
 
+  const tb=t.closest('[data-gtab]'); if(tb){ goGTab(tb.dataset.gtab); return; }
+
   const p=t.closest('[data-gp]');
-  if(p){ S.prod=p.dataset.gp; if(PRODUCTS[S.prod].idphoto&&S.adults<1)S.adults=1; renderAll(); return; }
+  if(p){ S.prod=p.dataset.gp; if(PRODUCTS[S.prod].idphoto&&S.adults<1)S.adults=1;
+    renderAll(); if(gTab==='msg') renderMsgs(); return; }
 
   const st=t.closest('[data-gstep]');
-  if(st){ S[st.dataset.gstep]=Math.max(st.dataset.gstep==='adults'?1:0, S[st.dataset.gstep]+(+st.dataset.d));
+  if(st){ const k=st.dataset.gstep; S[k]=Math.max(k==='adults'?1:0,S[k]+(+st.dataset.d));
     renderOpts(); renderQuote(); return; }
 
   const ex=t.closest('[data-gex]');
-  if(ex){ S.ex[ex.dataset.gex]=Math.max(0, S.ex[ex.dataset.gex]+(+ex.dataset.d));
+  if(ex){ const k=ex.dataset.gex; S.ex[k]=Math.max(0,S.ex[k]+(+ex.dataset.d));
     renderExtras(); renderQuote(); return; }
 
   const idb=t.closest('[data-gid]');
   if(idb){ S.idType=idb.dataset.gid; renderOpts(); renderQuote(); return; }
+
+  const sh=t.closest('.step-h'); if(sh){ sh.parentElement.classList.toggle('open'); syncExpand(); return; }
+  if(t.id==='expand'){ const s=$$('.step'), all=s.every(x=>x.classList.contains('open'));
+    s.forEach(x=>x.classList.toggle('open',!all)); syncExpand(); return; }
+
+  const cat=t.closest('[data-gcat]'); if(cat){ curCat=cat.dataset.gcat; renderCats(); renderMsgs(); return; }
+
+  const cp=t.closest('[data-gcopy]'); if(cp){ const el=$('#ta-'+cp.dataset.gcopy); if(el) copy(el.value,cp); return; }
+
+  const sm=t.closest('[data-gsms]');
+  if(sm){ if(!C.phone){ toast('휴대폰 번호를 먼저 입력해 주세요'); return; }
+    const el=$('#ta-'+sm.dataset.gsms);
+    if(el) location.href=`sms:${C.phone}?body=${encodeURIComponent(el.value)}`; return; }
+
+  const ca=t.closest('[data-gchadd]');
+  if(ca){ const m=ca.dataset.gchadd; (CH[m]=CH[m]||[]).push({size:'8x10인치',frames:1,photos:1,custom:''});
+    renderMsgs(); return; }
+  const cd=t.closest('[data-gchdel]');
+  if(cd){ const [m,i]=cd.dataset.gchdel.split('|'); CH[m].splice(+i,1); renderMsgs(); return; }
 });
+
+document.addEventListener('input',e=>{
+  const t=e.target;
+  if(!t.closest||!t.closest('#gc-root')) return;
+
+  if(t.id&&t.id.startsWith('c_')){
+    const k=t.id.slice(2);
+    C[k]= k==='phone' ? t.value.replace(/[^0-9]/g,'') : t.value.trim();
+    refreshAllMsgs(); $$('[data-gsms]').forEach(b=>b.disabled=!C.phone); return;
+  }
+  const mf=t.closest('[data-gmf]');
+  if(mf){ const [mid,k]=mf.dataset.gmf.split('|'); MV[mid]=MV[mid]||{};
+    MV[mid][k]= mf.type==='checkbox'?mf.checked:mf.value;
+    if(k==='_payOn') renderMsgs(); else refreshMsg(mid);
+    return; }
+  const ch=t.closest('[data-gch]');
+  if(ch){ const [mid,i,k]=ch.dataset.gch.split('|'); const r=CH[mid][+i];
+    r[k]=(k==='frames'||k==='photos')?Math.max(1,parseInt(ch.value)||1):ch.value;
+    if(k==='frames'&&!r._unlinked) r.photos=r.frames;
+    if(k==='photos') r._unlinked=true;
+    if(k==='size') renderMsgs(); else refreshMsg(mid);
+    return; }
+  const pr=t.closest('[data-gprice]');
+  if(pr){ PRICE[pr.dataset.gprice]=Math.max(0,parseInt(pr.value)||0);
+    pr.classList.toggle('unset',PRICE[pr.dataset.gprice]<=0); return; }
+  const dc=t.closest('[data-gdisc]');
+  if(dc){ DISCOUNT[dc.dataset.gdisc]=Math.min(100,Math.max(0,parseInt(dc.value)||0));
+    dc.classList.toggle('unset',DISCOUNT[dc.dataset.gdisc]<=0); return; }
+});
+
 document.addEventListener('change',e=>{
-  const tg=e.target.closest&&e.target.closest('[data-gtog]');
-  if(tg&&e.target.closest('#gc-root')){ S[tg.dataset.gtog]=tg.checked; renderQuote(); }
+  const t=e.target;
+  if(!t.closest||!t.closest('#gc-root')) return;
+  const tg=t.closest('[data-gtog]'); if(tg){ S[tg.dataset.gtog]=tg.checked; renderQuote(); return; }
+  const mf=t.closest('[data-gmf]');
+  if(mf&&mf.type==='checkbox'){ const [mid,k]=mf.dataset.gmf.split('|');
+    MV[mid]=MV[mid]||{}; MV[mid][k]=mf.checked; renderMsgs(); return; }
+  const ch=t.closest('[data-gch]');
+  if(ch&&ch.tagName==='SELECT'){ const [mid,i,k]=ch.dataset.gch.split('|');
+    CH[mid][+i][k]=ch.value; renderMsgs(); return; }
 });
+
 document.addEventListener('keydown',e=>{
   const w=document.getElementById('gc-wrap');
   if(e.key==='Escape'&&w&&w.classList.contains('on')) gcClose();
