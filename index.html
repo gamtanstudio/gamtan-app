@@ -697,6 +697,52 @@ let userRole = 'staff';
   background:var(--gc-ink);color:#fff;font-size:13px;font-weight:600;padding:11px 19px;border-radius:11px;
   opacity:0;pointer-events:none;transition:.22s;z-index:60}
 #gc-toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ===== 진행 탭 ===== */
+#gc-root .jbar{background:#fff;border:1px solid var(--gc-line);border-radius:var(--gc-r);box-shadow:var(--gc-sh);padding:13px 15px;margin-bottom:12px}
+#gc-root .jstat{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:11px}
+#gc-root .jst{flex:1;min-width:82px;border:1.5px solid var(--gc-line);border-radius:11px;padding:9px 11px;cursor:pointer;background:#fff;text-align:left;transition:.15s}
+#gc-root .jst b{display:block;font-size:19px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1}
+#gc-root .jst span{display:block;font-size:10.5px;color:var(--gc-ink3);margin-top:2px;font-weight:600}
+#gc-root .jst.on{border-color:var(--gc-ink);background:var(--gc-ink)}
+#gc-root .jst.on b,#gc-root .jst.on span{color:#fff}
+#gc-root .jst.hot b{color:var(--gc-danger)}
+#gc-root .jalert{border-radius:11px;padding:11px 13px;margin-bottom:11px;font-size:12.8px;font-weight:700;display:flex;align-items:center;gap:9px;line-height:1.5}
+#gc-root .jalert.d{background:var(--gc-danger-bg);border:1px solid #fbcfd8;color:var(--gc-danger)}
+#gc-root .jalert.w{background:var(--gc-warn-bg);border:1px solid #fcd9a0;color:var(--gc-warn)}
+#gc-root .jalert.ok{background:#e7f6ef;border:1px solid #b8e6cf;color:var(--gc-ok)}
+#gc-root .jalert .x{margin-left:auto;flex:none}
+#gc-root .jnew{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+#gc-root .jnew .f{flex:1;min-width:100px}
+#gc-root .jmode{font-size:10.5px;color:var(--gc-ink3);margin-top:8px}
+#gc-root .jcard{background:#fff;border:1px solid var(--gc-line);border-left:4px solid var(--jc,var(--gc-line));border-radius:var(--gc-r);box-shadow:var(--gc-sh);padding:13px 14px;margin-bottom:9px}
+#gc-root .jh{display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap}
+#gc-root .jh .who{flex:1;min-width:0}
+#gc-root .jh .who b{font-size:14.5px;font-weight:800;display:block;word-break:keep-all}
+#gc-root .jh .who span{display:block;font-size:11px;color:var(--gc-ink3);margin-top:1px}
+#gc-root .jbadge{font-size:10px;font-weight:800;padding:3px 7px;border-radius:6px;flex:none;white-space:nowrap;background:var(--jbg,var(--gc-line2));color:var(--jc,var(--gc-ink2))}
+#gc-root .jclock{font-size:11.5px;font-weight:800;font-variant-numeric:tabular-nums;flex:none;padding:3px 8px;border-radius:6px;background:var(--jbg,var(--gc-line2));color:var(--jc,var(--gc-ink2))}
+#gc-root .jbody{margin-top:10px}
+#gc-root .jsteps{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px}
+#gc-root .jstep{border:1.5px solid var(--gc-line);background:#fff;border-radius:8px;padding:5px 9px;font-size:11.5px;font-weight:700;color:var(--gc-ink3);cursor:pointer;white-space:nowrap;transition:.14s}
+#gc-root .jstep.on{border-color:var(--jc);background:var(--jbg);color:var(--jc)}
+#gc-root .jstep.past{border-color:var(--gc-line2);background:#fafbfc;color:#b8bfca}
+#gc-root .jrow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+#gc-root .jrow .f{flex:1;min-width:120px}
+#gc-root .jta{width:100%;font-size:12.8px;border:1.5px solid var(--gc-line);border-radius:9px;padding:8px 10px;background:#fff;resize:vertical;min-height:38px;line-height:1.5;font-family:inherit}
+#gc-root .jta:focus{outline:none;border-color:var(--gc-accent)}
+#gc-root .jpix{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+#gc-root .jpic{position:relative;width:72px;height:72px;border-radius:9px;overflow:hidden;border:1px solid var(--gc-line);flex:none}
+#gc-root .jpic img{width:100%;height:100%;object-fit:cover;cursor:zoom-in;display:block}
+#gc-root .jpic .rm{position:absolute;top:2px;right:2px;width:19px;height:19px;border:0;border-radius:5px;background:rgba(20,24,31,.72);color:#fff;font-size:11px;line-height:1;cursor:pointer;padding:0}
+#gc-root .jadd{width:72px;height:72px;border:1.5px dashed var(--gc-line);border-radius:9px;background:#fafbfc;cursor:pointer;color:var(--gc-ink3);font-size:10.5px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;flex:none}
+#gc-root .jadd em{font-style:normal;font-size:17px}
+#gc-root .jfoot{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;padding-top:9px;border-top:1px solid var(--gc-line2)}
+#gc-root .jempty{text-align:center;padding:34px 16px;color:var(--gc-ink3);font-size:13px;background:#fff;border:1px dashed var(--gc-line);border-radius:var(--gc-r);line-height:1.7}
+#gc-lb{position:fixed;inset:0;background:rgba(10,12,16,.86);display:none;align-items:center;justify-content:center;z-index:10001;padding:22px;cursor:zoom-out}
+#gc-lb.on{display:flex}
+#gc-lb img{max-width:100%;max-height:100%;border-radius:10px}
+
 </style>
 </head>
 <body>
@@ -1740,6 +1786,7 @@ function reserveBlock(b) {
 }
 // ====================== STORAGE ======================
 let bookings = [];
+window.__getBookings=function(){return bookings;};   // 감탄 콘솔 진행탭 연동용 (읽기)
 // 이전 체크리스트 툴과 호환: prodKey → product 필드 정규화
 bookings = bookings.map(b => {
   if(!b.product && b.prodKey) b.product = b.prodKey;
@@ -2209,6 +2256,7 @@ function saveBookings() {
   try { localStorage.setItem('gamtan_bookings', JSON.stringify(bookings.filter(b=>!b.smmate))); } catch(e) {}
   // ★ 금액 수정(override)된 SM 예약 보존용 캐시
   try { localStorage.setItem('gamtan_smmate_bookings', JSON.stringify(bookings.filter(b=>b.smmate))); } catch(e) {}
+  if(window.__onBookingsSaved) window.__onBookingsSaved();   // 감탄 콘솔 진행탭 새로고침
 }
 function saveCustomers() { scheduleSyncToSupabase(); }
 function saveDateMemos() { localStorage.setItem('gamtan_date_memos', JSON.stringify(dateMemos)); }
@@ -8519,10 +8567,11 @@ function closeDayDetail() {
 <!-- ===== 감탄 콘솔 (격리 패널) ===== -->
 <div id="gc-dim"></div>
 <div id="gc-toast"></div>
+<div id="gc-lb"><img id="gc-lbimg" alt=""></div>
 <div id="gc-wrap">
   <div id="gc-root">
     <div id="gc-head">
-      <b>💰 감탄 콘솔 <span id="gc-ver">v3</span></b>
+      <b>💰 감탄 콘솔 <span id="gc-ver">v4</span></b>
       <button id="gc-close" aria-label="닫기">✕</button>
     </div>
     <div id="gc-tabwrap"><div class="tabs" id="gc-tabs"></div></div>
@@ -8564,6 +8613,21 @@ function closeDayDetail() {
         </div>
         <div class="seg" id="msgcats" style="margin-bottom:12px"></div>
         <div id="msglist"></div>
+      </div>
+
+      <div id="gp-jobs" style="display:none">
+        <div id="jalerts"></div>
+        <div class="jbar">
+          <div class="jstat" id="jstat"></div>
+          <div class="jnew">
+            <div class="f"><label>고객 성함 (수동 등록)</label><input id="jm_name" placeholder="김미영"></div>
+            <div class="f"><label>촬영일</label><input id="jm_date" type="date"></div>
+            <div class="f"><label>상품</label><select id="jm_prod"></select></div>
+            <button class="btn" id="jm_add">+ 등록</button>
+          </div>
+          <div class="jmode" id="jmode"></div>
+        </div>
+        <div id="jlist"></div>
       </div>
 
       <div id="gp-script" style="display:none">
@@ -9092,10 +9156,10 @@ function upgradeTable(adults,kids){
 가족 단체방에도 올리시고,
 몇 년 지나 다시 꺼내보시는 분들이 많으세요~
 
-원본까지 함께 받길 원하시면 감탄스토리로 진행하시면 됩니다.
+원본까지 함께 받길 원하시면 아래 금액으로 진행됩니다.
 (원본 100컷 이상 · 2000x3000픽셀)
 
-${tot}인 가족 기준 감탄스토리 금액입니다.
+${tot}인 가족 기준 원본 포함 금액입니다.
 ${lines.join('\n')}
 
 지금 미리 정하지 않으셔도 됩니다.
@@ -9839,6 +9903,237 @@ function renderPriceTab(){
 
 
 
+
+/* ==========================================================================
+   진행 탭 — CRM 예약 자동 연동 + 수동 등록
+   ========================================================================== */
+const JOB_STAGES=[
+ {k:'sent',  n:'원본 발송', crm:3, c:'#0891b2', bg:'#e6f6fa'},
+ {k:'picked',n:'사진 선택', crm:5, c:'#4f46e5', bg:'#eef0ff'},
+ {k:'framed',n:'액자 완료', crm:6, c:'#d97706', bg:'#fdf2e3'},
+ {k:'done',  n:'출고 완료', crm:7, c:'#059669', bg:'#e7f6ef'},
+];
+const WORK_DAYS=28, WAIT_WARN=7, WAIT_HOT=14;
+const DAY=86400000;
+
+/* 진행용 부가 데이터(발송일·선택일·메모·사진)는 CRM 예약을 안 건드리고 따로 저장.
+   예약 id 로 연결한다. 수동 등록 건도 여기에 산다. */
+const JXKEY='gamtan_jobmeta_v1';
+let JMETA={};      // { [id]: {sentAt, pickedAt, picks, memo, photos:[], manual?, name?, date?, prod?} }
+let jmOK=true;
+function jmLoad(){ try{ JMETA=JSON.parse(localStorage.getItem(JXKEY)||'{}'); jmOK=true; }catch(e){ JMETA={}; jmOK=false; } }
+function jmSave(){ try{ localStorage.setItem(JXKEY, JSON.stringify(JMETA)); jmOK=true; return true; }
+  catch(e){ jmOK=false; toast('저장 공간이 꽉 찼어요. 사진을 줄여 주세요.'); return false; } }
+function meta(id){ return JMETA[id] || (JMETA[id]={sentAt:'',pickedAt:'',picks:'',memo:'',photos:[]}); }
+
+const d0=s=>{ if(!s) return null; const d=new Date(s+'T00:00:00'); return isNaN(d)?null:d.getTime(); };
+const today0=()=>{ const d=new Date(); d.setHours(0,0,0,0); return d.getTime(); };
+const daysSince=s=>{ const t=d0(s); return t===null?null:Math.floor((today0()-t)/DAY); };
+function fmtMD(s){ if(!s) return ''; const d=new Date(s+'T12:00:00'); return `${d.getMonth()+1}/${d.getDate()}`; }
+
+/* CRM 예약 → 진행 카드로 변환 (원본발송~보정본발송 구간만) */
+function jobsFromBookings(){
+  const raw = (window.__getBookings ? window.__getBookings() : []) || [];
+  const out=[];
+  raw.forEach(b=>{
+    if(b.cancelled) return;
+    const cs = b.currentStage||0;
+    if(cs < 3) return;              // 아직 촬영·원본 전이면 진행 현황 밖
+    const m=meta('crm:'+b.id);
+    // 자동 채움: CRM 단계가 이미 지났는데 날짜 비어있으면 기록 유도 (자동으로 오늘 넣지 않음)
+    out.push({
+      id:'crm:'+b.id, src:'crm', ref:b,
+      name:b.name||'', date:b.date||'', prod:b.product||'',
+      cs, ...m
+    });
+  });
+  return out;
+}
+function jobsManual(){
+  return Object.entries(JMETA).filter(([id,m])=>m.manual)
+    .map(([id,m])=>({id, src:'manual', name:m.name||'', date:m.date||'', prod:m.prod||'', cs:m.cs||3, ...m}));
+}
+function allJobs(){ return [...jobsFromBookings(), ...jobsManual()]; }
+
+/* 현재 단계 판정: CRM 단계 우선, 수동 오버라이드(framed/done 수동체크) 반영 */
+function stageOf(j){
+  // 수동 오버라이드(날짜 클릭)가 있으면 그것 우선, 없으면 CRM 단계로 판정
+  if(j.doneAt || j.cs>=7) return 'done';
+  if(j.framedAt || j.cs>=6) return 'framed';
+  if(j.pickedAt || j.cs>=5) return 'picked';
+  return 'sent';
+}
+function stageMeta(k){ return JOB_STAGES.find(s=>s.k===k)||JOB_STAGES[0]; }
+
+/* 두 시계 */
+const LV={ok:{c:'#059669',bg:'#e7f6ef'},warm:{c:'#b45309',bg:'#fff8ea'},
+          hot:{c:'#be123c',bg:'#fff1f3'},over:{c:'#be123c',bg:'#fff1f3'}};
+function clockOf(j){
+  const st=stageOf(j);
+  if(st==='done'||st==='framed') return null;
+  if(st==='picked'){
+    if(!j.pickedAt) return {kind:'work',lv:'warm',n:null,label:'선택일 입력 필요'};
+    const p=d0(j.pickedAt); const left=Math.ceil((p+WORK_DAYS*DAY-today0())/DAY);
+    const lv=left<0?'over':(left<=3?'hot':(left<=7?'warm':'ok'));
+    return {kind:'work',n:left,lv,label:left<0?`기한 ${-left}일 지남`:(left===0?'오늘까지':`제작 ${left}일 남음`)};
+  }
+  // sent
+  if(!j.sentAt) return {kind:'wait',lv:'warm',n:null,label:'발송일 입력 필요'};
+  const n=daysSince(j.sentAt);
+  const lv=n>=WAIT_HOT?'hot':(n>=WAIT_WARN?'warm':'ok');
+  return {kind:'wait',n,lv,label:`선택 대기 ${n}일`};
+}
+
+/* 알림 */
+let notifyMode='unknown', notified={};
+function jNotifyInit(){ try{ notifyMode=('Notification' in window && Notification.permission)?Notification.permission:'unsupported'; }catch(e){ notifyMode='unsupported'; } }
+function jAskNotify(){
+  if(!('Notification' in window)){ toast('이 브라우저는 알림을 지원하지 않아요'); return; }
+  Notification.requestPermission().then(p=>{ notifyMode=p; renderJobs();
+    toast(p==='granted'?'알림이 켜졌어요 ✓':'거부됐어요. 화면·탭 제목으로 알려드릴게요.'); })
+    .catch(()=>{ notifyMode='denied'; renderJobs(); });
+}
+function fire(title,body,tag){ if(notifyMode!=='granted'||notified[tag]) return;
+  try{ new Notification(title,{body,tag}); notified[tag]=1; }catch(e){} }
+
+function jSummary(){
+  const js=allJobs(); let wait=0,work=0,hot=0,done=0; const hits=[];
+  js.forEach(j=>{ const st=stageOf(j); if(st==='done'){done++;return;}
+    const c=clockOf(j);
+    if(st==='sent'){ wait++; if(c&&c.lv==='hot'){hot++;hits.push({j,c});} }
+    else if(st==='picked'){ work++; if(c&&(c.lv==='hot'||c.lv==='over')){hot++;hits.push({j,c});} }
+  });
+  return {wait,work,hot,done,total:js.length,hits,list:js};
+}
+function jCheck(){
+  const s=jSummary();
+  document.title = s.hot>0 ? `(${s.hot}) 감탄사진관 통합 관리` : '감탄사진관 통합 관리';
+  s.hits.forEach(({j,c})=>{ const tag=`${j.id}-${c.kind}-${c.lv}`;
+    if(c.kind==='work') fire('액자 기한 임박',`${j.name||'고객'} · ${c.label}`,tag);
+    else fire('사진 선택 지연',`${j.name||'고객'} · ${c.label}`,tag); });
+  return s;
+}
+
+function shrink(file){
+  return new Promise((res,rej)=>{ const r=new FileReader();
+    r.onerror=()=>rej(); r.onload=()=>{ const img=new Image();
+      img.onerror=()=>rej(); img.onload=()=>{ const MAX=560; let w=img.width,h=img.height;
+        if(w>h&&w>MAX){h=Math.round(h*MAX/w);w=MAX;} else if(h>=w&&h>MAX){w=Math.round(w*MAX/h);h=MAX;}
+        const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+        cv.getContext('2d').drawImage(img,0,0,w,h); res(cv.toDataURL('image/jpeg',.7)); };
+      img.src=r.result; }; r.readAsDataURL(file); });
+}
+
+let jFilter='live';
+function renderJobs(){
+  if(gTab!=='jobs') { jCheck(); return; }
+  const s=jCheck();
+
+  // 알림 배너
+  const al=[];
+  if(s.hot>0) al.push(`<div class="jalert d">⚠ 지금 봐야 할 건 ${s.hot}건${notifyBtn()}</div>`);
+  else if(s.total) al.push(`<div class="jalert ok">✓ 기한 넘긴 건 없습니다${notifyBtn()}</div>`);
+  if(!jmOK) al.push(`<div class="jalert w">⚠ 저장이 안 되고 있어요.</div>`);
+  $('#jalerts').innerHTML=al.join('');
+
+  // 요약
+  const f=[['live','진행 중',s.wait+s.work,''],['sent','선택 대기',s.wait,''],
+    ['picked','제작 중',s.work,''],['hot','기한 임박',s.hot,s.hot?'hot':''],
+    ['done','출고 완료',s.done,''],['all','전체',s.total,'']];
+  $('#jstat').innerHTML=f.map(([k,n,v,c])=>
+    `<button class="jst ${c} ${jFilter===k?'on':''}" data-jf="${k}"><b>${v}</b><span>${n}</span></button>`).join('');
+
+  const nm={granted:'알림 켜짐',denied:'알림 꺼짐 (탭 제목으로 표시)',
+    unsupported:'알림 미지원',default:'알림 미설정'}[notifyMode]||'알림 미설정';
+  $('#jmode').innerHTML=`예약 자동 연동 + 수동 · ${nm}`;
+
+  // 목록
+  let list=s.list.filter(j=>{ const st=stageOf(j);
+    if(jFilter==='all') return true;
+    if(jFilter==='live') return st!=='done';
+    if(jFilter==='hot'){ const c=clockOf(j); return c&&(c.lv==='hot'||c.lv==='over'); }
+    if(jFilter==='sent') return st==='sent';
+    if(jFilter==='picked') return st==='picked';
+    if(jFilter==='done') return st==='done';
+    return true;
+  }).sort((a,b)=>{ const ca=clockOf(a),cb=clockOf(b);
+    const pa=ca?({over:0,hot:1,warm:2,ok:3})[ca.lv]:4, pb=cb?({over:0,hot:1,warm:2,ok:3})[cb.lv]:4;
+    return pa!==pb?pa-pb:(b.date||'').localeCompare(a.date||''); });
+
+  $('#jlist').innerHTML = list.length ? list.map(jCard).join('')
+    : `<div class="jempty">${s.total?'해당하는 건이 없어요':'원본을 발송한 예약이 여기에 자동으로 올라옵니다.<br>또는 아래에서 직접 등록할 수 있어요.'}</div>`;
+}
+function notifyBtn(){ return (notifyMode==='granted'||notifyMode==='unsupported')?''
+  :`<span class="x"><button class="btn${notifyMode==='denied'?' alt':''}" data-jnotify>알림 켜기</button></span>`; }
+
+function jCard(j){
+  const st=stageOf(j), sm=stageMeta(st), c=clockOf(j);
+  const col=c?LV[c.lv]:{c:sm.c,bg:sm.bg};
+  const P=(typeof PRODUCTS!=='undefined'&&PRODUCTS[j.prod])?PRODUCTS[j.prod]:null;
+  const idx=JOB_STAGES.findIndex(x=>x.k===st);
+  const steps=JOB_STAGES.map((x,n)=>
+    `<button class="jstep ${n===idx?'on':(n<idx?'past':'')}" data-jstage="${j.id}|${x.k}">${x.n}</button>`).join('');
+  const pix=(j.photos||[]).map((p,n)=>
+    `<div class="jpic"><img src="${p}" data-jzoom="${j.id}|${n}" alt="사진 ${n+1}">
+      <button class="rm" data-jrm="${j.id}|${n}">✕</button></div>`).join('');
+  const srcTag = j.src==='crm' ? '' : '<span class="jbadge" style="--jbg:#f0f2f6;--jc:#8b93a3">수동</span>';
+
+  return `<div class="jcard" style="--jc:${col.c};--jbg:${col.bg}">
+    <div class="jh">
+      <span class="who"><b>${esc2(j.name)||'(이름 없음)'}</b>
+        <span>${fmtMD(j.date)||'날짜 없음'} · ${P?P.short:(j.prod||'')}</span></span>
+      ${srcTag}<span class="jbadge">${sm.n}</span>
+      ${c?`<span class="jclock">${c.label}</span>`:''}
+    </div>
+    <div class="jbody">
+      <div class="jsteps">${steps}</div>
+      <div class="jrow">
+        <div class="f"><label>원본 발송일</label><input type="date" data-jm="${j.id}|sentAt" value="${j.sentAt||''}"></div>
+        <div class="f"><label>사진 선택일</label><input type="date" data-jm="${j.id}|pickedAt" value="${j.pickedAt||''}"></div>
+      </div>
+      <div class="f" style="margin-bottom:8px"><label>고른 파일번호 · 액자 구성</label>
+        <textarea class="jta" data-jm="${j.id}|picks" placeholder="예) 8x10 액자 — 0342">${esc2(j.picks||'')}</textarea></div>
+      <div class="f"><label>메모</label>
+        <textarea class="jta" data-jm="${j.id}|memo" placeholder="합성 요청 등">${esc2(j.memo||'')}</textarea></div>
+      <div class="jpix">${pix}<button class="jadd" data-jaddphoto="${j.id}"><em>＋</em>사진</button></div>
+    </div>
+    <div class="jfoot">
+      <button class="btn alt" data-jtomsg="${j.id}">문자로</button>
+      ${j.src==='manual'?`<button class="btn alt" data-jdel="${j.id}" style="color:var(--gc-danger)">삭제</button>`:''}
+    </div>
+  </div>`;
+}
+function esc2(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');}
+
+/* 조작 */
+function jFindMeta(id){ return meta(id); }
+function jSetStageManual(id,k){
+  const m=meta(id); const t=new Date().toISOString().slice(0,10);
+  // 단계 클릭 = 그 단계 진입 날짜 기록 (진행용, CRM 안 건드림)
+  if(k==='sent'  && !m.sentAt)  m.sentAt=t;
+  if(k==='picked'&& !m.pickedAt)m.pickedAt=t;
+  if(k==='framed') m.framedAt=t;
+  if(k==='done')   m.doneAt=t;
+  if(k==='sent'){ delete m.framedAt; delete m.doneAt; }
+  if(k==='picked'){ delete m.framedAt; delete m.doneAt; }
+  if(k==='framed'){ delete m.doneAt; }
+  Object.keys(notified).forEach(x=>{ if(x.startsWith(id)) delete notified[x]; });
+  jmSave(); renderJobs();
+}
+async function jAddPhotoTo(id,files){
+  const m=meta(id); m.photos=m.photos||[];
+  for(const f of files){ if(!f.type.startsWith('image/')) continue;
+    try{ m.photos.push(await shrink(f)); }catch(e){ toast('이 사진은 못 읽었어요'); } }
+  if(jmSave()) renderJobs(); else { m.photos.pop(); renderJobs(); }
+}
+function jAddManual(){
+  const name=$('#jm_name').value.trim(), date=$('#jm_date').value, prod=$('#jm_prod').value;
+  if(!name){ toast('고객 성함을 넣어주세요'); return; }
+  const id='man:'+Date.now().toString(36);
+  JMETA[id]={manual:true,name,date,prod,cs:3,sentAt:'',pickedAt:'',picks:'',memo:'',photos:[]};
+  jmSave(); $('#jm_name').value=''; renderJobs();
+}
+
 /* ---- 이 모듈 전용 (CRM 전역과 절대 안 섞임) ---- */
 function renderAll(){ renderProds(); renderOpts(); renderExtras(); renderQuote(); }
 function syncExpand(){
@@ -9847,7 +10142,7 @@ function syncExpand(){
 }
 
 /* ---- 패널 탭 ---- */
-const GTABS=[{k:'quote',n:'견적'},{k:'msg',n:'문자'},{k:'script',n:'상담'},{k:'price',n:'가격'}];
+const GTABS=[{k:'quote',n:'견적'},{k:'msg',n:'문자'},{k:'jobs',n:'진행'},{k:'script',n:'상담'},{k:'price',n:'가격'}];
 let gTab='quote';
 function renderGTabs(){
   const t=$('#gc-tabs'); if(!t) return;
@@ -9858,6 +10153,7 @@ function goGTab(k){
   gTab=k; renderGTabs();
   if(k==='quote') renderAll();
   if(k==='msg') renderMsgs();
+  if(k==='jobs') renderJobs();
   if(k==='price') renderPriceTab();
   const b=$('#gc-body'); if(b) b.scrollTop=0;
 }
@@ -9873,7 +10169,17 @@ function gcOpen(){
     C.time='11:00';
     const t=new Date().toISOString().slice(0,10);
     if($('#c_date')) $('#c_date').value=t;
+    if($('#jm_date')) $('#jm_date').value=t;
     C.date=t;
+    jmLoad(); jNotifyInit();
+    window.__onBookingsSaved=()=>{ if(gTab==='jobs') renderJobs(); else jCheck(); };
+    setInterval(()=>{ if(document.getElementById('gc-wrap')){ if(gTab==='jobs') renderJobs(); else jCheck(); } }, 60000);
+    // 상품 셀렉트 채우기
+    const sel=$('#jm_prod');
+    if(sel && typeof PRODUCTS!=='undefined')
+      sel.innerHTML=Object.entries(PRODUCTS).filter(([k])=>k!=='id')
+        .map(([k,P])=>`<option value="${k}">${P.short}</option>`).join('');
+    jCheck();
   }
   renderGTabs(); renderAll();
 }
@@ -9882,7 +10188,7 @@ function gcClose(){
   document.getElementById('gc-dim').classList.remove('on');
 }
 window.openQuoteConsole=gcOpen;
-console.log('%c감탄 콘솔 v3 로드됨 (견적·문자·상담·가격)','background:#4f46e5;color:#fff;padding:2px 6px;border-radius:3px');
+console.log('%c감탄 콘솔 v4 로드됨 (견적·문자·진행·상담·가격)','background:#4f46e5;color:#fff;padding:2px 6px;border-radius:3px');
 
 /* ---- 이벤트: 패널 안에서만 반응 ---- */
 document.addEventListener('click',e=>{
@@ -9925,6 +10231,34 @@ document.addEventListener('click',e=>{
     renderMsgs(); return; }
   const cd=t.closest('[data-gchdel]');
   if(cd){ const [m,i]=cd.dataset.gchdel.split('|'); CH[m].splice(+i,1); renderMsgs(); return; }
+
+  /* ---- 진행 탭 ---- */
+  if(t.closest('[data-jnotify]')){ jAskNotify(); return; }
+  if(t.id==='jm_add'){ jAddManual(); return; }
+  const jf=t.closest('[data-jf]'); if(jf){ jFilter=jf.dataset.jf; renderJobs(); return; }
+  const jstg=t.closest('[data-jstage]');
+  if(jstg){ const [id,k]=jstg.dataset.jstage.split('|'); jSetStageManual(id,k); return; }
+  const jap=t.closest('[data-jaddphoto]');
+  if(jap){ const id=jap.dataset.jaddphoto; const inp=document.createElement('input');
+    inp.type='file'; inp.accept='image/*'; inp.multiple=true;
+    inp.onchange=()=>jAddPhotoTo(id,[...inp.files]); inp.click(); return; }
+  const jrm=t.closest('[data-jrm]');
+  if(jrm){ const [id,n]=jrm.dataset.jrm.split('|'); const m=meta(id);
+    if(m.photos){ m.photos.splice(+n,1); jmSave(); renderJobs(); } return; }
+  const jz=t.closest('[data-jzoom]');
+  if(jz){ const [id,n]=jz.dataset.jzoom.split('|'); const m=meta(id);
+    if(m.photos&&m.photos[+n]){ $('#gc-lbimg').src=m.photos[+n]; $('#gc-lb').classList.add('on'); } return; }
+  if(t.closest('#gc-lb')){ $('#gc-lb').classList.remove('on'); $('#gc-lbimg').src=''; return; }
+  const jdel=t.closest('[data-jdel]');
+  if(jdel){ const id=jdel.dataset.jdel;
+    if(confirm('이 수동 등록 건을 지울까요?')){ delete JMETA[id]; jmSave(); renderJobs(); } return; }
+  const jtm=t.closest('[data-jtomsg]');
+  if(jtm){ const j=allJobs().find(x=>x.id===jtm.dataset.jtomsg);
+    if(j){ if(j.prod&&PRODUCTS[j.prod]) S.prod=j.prod;
+      C.name=j.name||''; C.date=j.date||'';
+      if($('#c_name')) $('#c_name').value=C.name;
+      if($('#c_date')) $('#c_date').value=C.date;
+      renderAll(); goGTab('msg'); } return; }
 });
 
 document.addEventListener('input',e=>{
@@ -9948,6 +10282,10 @@ document.addEventListener('input',e=>{
     if(k==='photos') r._unlinked=true;
     if(k==='size') renderMsgs(); else refreshMsg(mid);
     return; }
+  const jm=t.closest('[data-jm]');
+  if(jm){ const [id,k]=jm.dataset.jm.split('|'); const m=meta(id); m[k]=t.value;
+    Object.keys(notified).forEach(x=>{ if(x.startsWith(id)) delete notified[x]; });
+    jmSave(); if(k==='sentAt'||k==='pickedAt') renderJobs(); return; }
   const pr=t.closest('[data-gprice]');
   if(pr){ PRICE[pr.dataset.gprice]=Math.max(0,parseInt(pr.value)||0);
     pr.classList.toggle('unset',PRICE[pr.dataset.gprice]<=0); return; }
