@@ -2163,6 +2163,23 @@ async function loadFromSupabase() {
 
     showSyncStatus('✅ 최신 데이터 (' + allSched.length + '건)');
     // 모달 열려있으면 렌더 지연 — 모달 닫힐 때 자동 갱신됨
+    // ★ Supabase 작업상태 병합 (기기 간 동기화) — 모든 기기가 같은 상태를 봄
+    // booking_state 테이블이 없으면 조용히 건너뜀 (localStorage 캐시로 동작)
+    try {
+      const stateRows = await fetchAll((from, to) =>
+        supa.from('booking_state').select('booking_key,state').range(from, to));
+      if (stateRows.length > 0) {
+        const stateMap = {};
+        stateRows.forEach(r => { if (r.booking_key) stateMap[r.booking_key] = r.state || {}; });
+        bookings = bookings.map(b => {
+          const st = stateMap[bookingStateKey(b)];
+          return st ? Object.assign({}, b, st) : b;
+        });
+        // 병합 결과를 로컬 캐시에도 반영
+        try { localStorage.setItem('gamtan_sm_edits', JSON.stringify(bookings.filter(b=>b.smmate && smHasLocalState(b)))); } catch(e) {}
+      }
+    } catch(e) { /* booking_state 테이블 미생성 — 무시 */ }
+
     const modalOpen = document.getElementById('add-modal')?.classList.contains('open')
       || document.getElementById('wf-modal')?.classList.contains('open');
     if (!modalOpen) {
@@ -2200,6 +2217,21 @@ async function syncToSupabase() {
         }))
       );
     }
+    // ★ 작업 상태(완료/출고/출고연락/금액수정 등) Supabase 저장 — 기기 간 동기화
+    // booking_state 테이블이 아직 없으면 조용히 건너뜀 (localStorage로 계속 동작)
+    try {
+      const edited = bookings.filter(b => smHasLocalState(b) && b.name && b.date);
+      if (edited.length > 0) {
+        await supa.from('booking_state').upsert(
+          edited.map(b => ({
+            booking_key: bookingStateKey(b),
+            state: extractBookingState(b),
+            updated_at: new Date().toISOString(),
+          })),
+          { onConflict: 'booking_key' }
+        );
+      }
+    } catch(e) { /* booking_state 테이블 미생성 — 무시 */ }
     showSyncStatus('✅ 저장됨');
   } catch(e) {
     showSyncStatus('⚠️ 저장 실패');
@@ -2257,6 +2289,35 @@ function smHasLocalState(b) {
     (b.customShipRows && b.customShipRows.length > 0) ||
     (b.memo && b.memo.trim())
   );
+}
+// ★ 기기 간 동기화용: 예약 식별키(이름|날짜|시간) — new_id가 바뀌어도 불변
+function bookingStateKey(b) {
+  return `${(b.name||'').trim()}|${(b.date||'').trim()}|${(b.time||'').trim()}`;
+}
+// 저장할 작업 상태만 추출 (기본 예약정보는 제외 — Supabase에서 옴)
+function extractBookingState(b) {
+  const s = {};
+  if (b.workChecks && Object.keys(b.workChecks).length) s.workChecks = b.workChecks;
+  if (b.photoSelected)  s.photoSelected = true;
+  if (b.pickupContacted) s.pickupContacted = true;
+  if (b.reviewed)       s.reviewed = true;
+  if ((b.currentStage||0) > 0) s.currentStage = b.currentStage;
+  if (b.stageChecks && Object.keys(b.stageChecks).length) s.stageChecks = b.stageChecks;
+  if (b.customShipRows && b.customShipRows.length) s.customShipRows = b.customShipRows;
+  if (b.cancelled) s.cancelled = true;
+  if (b.postponed) s.postponed = true;
+  if (b.dateTbd)   s.dateTbd = true;
+  if (b.snsConsent) s.snsConsent = true;
+  if (b.memo && b.memo.trim()) s.memo = b.memo;
+  if (b.smmate_price_override) {
+    s.smmate_price_override = true;
+    if (b.priceItems) s.priceItems = b.priceItems;
+    if (b.payments)   s.payments = b.payments;
+  } else if (!b.smmate) {
+    if (b.priceItems) s.priceItems = b.priceItems;
+    if (b.payments)   s.payments = b.payments;
+  }
+  return s;
 }
 function saveBookings() {
   // 신규 예약(sm_ 아닌 것)만 Supabase에 저장
@@ -7873,14 +7934,20 @@ function renderStats() {
     </div>`;
   }
 
-  // 가격 정보가 있는 예약만
-  const bks = bookings.filter(b => b.priceItems && b.priceItems.length > 0 && b.payments);
+  // 매출 대상: 가격항목이 있거나(직접입력·수정), SM 결제기록(payments.total)이 있는 예약
+  const bks = bookings.filter(b =>
+    (b.priceItems && b.priceItems.length > 0 && b.payments) ||
+    (b.smmate && b.payments && Number(b.payments.total) > 0)
+  );
 
   let sumTotal=0, sumPaid=0, sumPending=0, cntFull=0, cntPending=0;
   const byMonth = {}, byProduct = {};
 
   bks.forEach(b => {
-    const total = priceTotal(b);
+    // 가격항목 없는 SM 예약은 결제기록 총액을 매출로 사용
+    const total = (b.priceItems && b.priceItems.length > 0)
+      ? priceTotal(b)
+      : Number(b.payments?.total || 0);
     const paid  = paidTotal(b);
     const remain = Math.max(0, total - paid);
     sumTotal   += total;
