@@ -1942,23 +1942,13 @@ async function onLoginSuccess(user) {
   applyRoleUI();
   document.getElementById('login-screen').style.display = 'none';
 
-  // ★ 1단계: 캐시된 SM메이트 데이터로 즉시 화면 표시
-  const cachedSm = localStorage.getItem('gamtan_smmate_bookings');
-  if (cachedSm) {
-    try {
-      const smParsed = JSON.parse(cachedSm);
-      const localBks = JSON.parse(localStorage.getItem('gamtan_bookings')||'[]');
-      const localOnly = localBks.filter(b => !b.smmate);
-      bookings = [...smParsed, ...localOnly];
-      showSyncStatus('⚡ 캐시 로드 (업데이트 중...)');
-      if (typeof renderMonthCal === 'function') renderMonthCal();
-      if (typeof renderList === 'function') renderList();
-    } catch(e) {
-      showSyncStatus('🔄 불러오는 중...');
-    }
-  } else {
-    showSyncStatus('🔄 불러오는 중...');
-  }
+  // ★ 1단계: 직접 등록분만 즉시 표시 (SM 전체는 Supabase에서 바로 불러옴 — 거대 캐시 폐기)
+  try { localStorage.removeItem('gamtan_smmate_bookings'); } catch(e) {}  // 옛 거대 캐시 공간 회수
+  try {
+    const localBks = JSON.parse(localStorage.getItem('gamtan_bookings')||'[]');
+    bookings = localBks.filter(b => !b.smmate);
+  } catch(e) { bookings = []; }
+  showSyncStatus('🔄 불러오는 중...');
 
   // ★ 2단계: 백그라운드에서 Supabase 최신 데이터 갱신 (await 없이)
   loadFromSupabase();
@@ -2066,8 +2056,10 @@ async function loadFromSupabase() {
       // 캐시(로컬에서 손댄 모든 상태: 사진선택·준비/출고 체크·가격수정·단계 등)를 베이스로 두고,
       // SM메이트에서 새로 내려오는 예약정보 필드만 최신값으로 덮어씀
       const cachedSmBks = JSON.parse(localStorage.getItem('gamtan_smmate_bookings')||'[]');
+      const smEdits = JSON.parse(localStorage.getItem('gamtan_sm_edits')||'[]');
       const cachedMap = {};
       cachedSmBks.forEach(b => { cachedMap[b.id] = b; });
+      smEdits.forEach(b => { cachedMap[b.id] = b; });   // 편집분 우선 — 소용량 키가 신뢰 소스
       const SM_FRESH_FIELDS = ['name','date','time','phone','customer_no','status','visitNote'];
       const mergedImported = imported.map(b => {
         const cached = cachedMap[b.id];
@@ -2079,9 +2071,10 @@ async function loadFromSupabase() {
         return merged;
       });
       bookings = [...mergedImported, ...localOnly];
-      localStorage.setItem('gamtan_bookings', JSON.stringify(bookings));
-      // ★ SM메이트 데이터 별도 캐시 저장 (다음 로그인 시 즉시 표시용)
-      try { localStorage.setItem('gamtan_smmate_bookings', JSON.stringify(mergedImported)); } catch(e) {}
+      // 직접 등록분만 저장(소량), 편집된 SM만 소용량 키에 — 거대 캐시는 폐기(용량 초과 원인)
+      try { localStorage.setItem('gamtan_bookings', JSON.stringify(localOnly)); } catch(e) {}
+      try { localStorage.setItem('gamtan_sm_edits', JSON.stringify(mergedImported.filter(b=>smHasLocalState(b)))); } catch(e) {}
+      try { localStorage.removeItem('gamtan_smmate_bookings'); } catch(e) {}
     }
 
     // 고객 정보 처리
@@ -2254,12 +2247,25 @@ function scheduleSyncToSupabase() {
 }
 // ===== 구글 시트 연동 끝 =====
 
+// SM 예약 중 로컬에서 편집된(보존해야 할) 건인지 판단
+function smHasLocalState(b) {
+  return !!(
+    b.smmate_price_override || b.photoSelected || b.pickupContacted || b.reviewed ||
+    (b.currentStage || 0) > 0 || b.snsConsent || b.cancelled || b.postponed || b.dateTbd ||
+    (b.workChecks && Object.keys(b.workChecks).length > 0) ||
+    (b.stageChecks && Object.keys(b.stageChecks).length > 0) ||
+    (b.customShipRows && b.customShipRows.length > 0) ||
+    (b.memo && b.memo.trim())
+  );
+}
 function saveBookings() {
   // 신규 예약(sm_ 아닌 것)만 Supabase에 저장
   scheduleSyncToSupabase();
+  // 직접 등록한 예약(소량)
   try { localStorage.setItem('gamtan_bookings', JSON.stringify(bookings.filter(b=>!b.smmate))); } catch(e) {}
-  // ★ 금액 수정(override)된 SM 예약 보존용 캐시
-  try { localStorage.setItem('gamtan_smmate_bookings', JSON.stringify(bookings.filter(b=>b.smmate))); } catch(e) {}
+  // ★ 편집된 SM 예약만 소용량 키에 보존 (SM 전체를 담던 거대 키는 폐기 — 용량 초과 원인)
+  try { localStorage.setItem('gamtan_sm_edits', JSON.stringify(bookings.filter(b=>b.smmate && smHasLocalState(b)))); } catch(e) {}
+  try { localStorage.removeItem('gamtan_smmate_bookings'); } catch(e) {}
 }
 function saveCustomers() { scheduleSyncToSupabase(); }
 function saveDateMemos() { localStorage.setItem('gamtan_date_memos', JSON.stringify(dateMemos)); }
