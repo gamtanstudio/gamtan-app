@@ -2287,7 +2287,7 @@ function scheduleSyncToSupabase() {
 function smHasLocalState(b) {
   return !!(
     b.smmate_price_override || b.photoSelected || b.pickupContacted || b.reviewed ||
-    (b.currentStage || 0) > 0 || b.snsConsent || b.cancelled || b.postponed || b.dateTbd ||
+    b.snsConsent || b.cancelled || b.postponed || b.dateTbd ||
     (b.workChecks && Object.keys(b.workChecks).length > 0) ||
     (b.stageChecks && Object.keys(b.stageChecks).length > 0) ||
     (b.customShipRows && b.customShipRows.length > 0) ||
@@ -2305,7 +2305,6 @@ function extractBookingState(b) {
   if (b.photoSelected)  s.photoSelected = true;
   if (b.pickupContacted) s.pickupContacted = true;
   if (b.reviewed)       s.reviewed = true;
-  if ((b.currentStage||0) > 0) s.currentStage = b.currentStage;
   if (b.stageChecks && Object.keys(b.stageChecks).length) s.stageChecks = b.stageChecks;
   if (b.customShipRows && b.customShipRows.length) s.customShipRows = b.customShipRows;
   if (b.cancelled) s.cancelled = true;
