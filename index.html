@@ -2221,9 +2221,13 @@ async function syncToSupabase() {
     // booking_state 테이블이 아직 없으면 조용히 건너뜀 (localStorage로 계속 동작)
     try {
       const edited = bookings.filter(b => smHasLocalState(b) && b.name && b.date);
-      if (edited.length > 0) {
+      // ★ 같은 booking_key(이름|날짜|시간) 중복 제거 — 한 요청에 같은 키 두 번 있으면 Postgres가 거부(21000)
+      const byKey = {};
+      edited.forEach(b => { byKey[bookingStateKey(b)] = b; });  // 뒤엣것이 이김
+      const uniqueEdited = Object.values(byKey);
+      if (uniqueEdited.length > 0) {
         await supa.from('booking_state').upsert(
-          edited.map(b => ({
+          uniqueEdited.map(b => ({
             booking_key: bookingStateKey(b),
             state: extractBookingState(b),
             updated_at: new Date().toISOString(),
