@@ -2062,20 +2062,21 @@ async function loadFromSupabase() {
 
       const localBks = JSON.parse(localStorage.getItem('gamtan_bookings')||'[]');
       const localOnly = localBks.filter(b => !b.smmate);
-      // ★ 금액 수정(override)된 SM 예약 보존: Supabase 원본이 덮어쓰지 않도록 병합
+      // ★ SM 예약의 로컬 작업상태 전체 보존
+      // 캐시(로컬에서 손댄 모든 상태: 사진선택·준비/출고 체크·가격수정·단계 등)를 베이스로 두고,
+      // SM메이트에서 새로 내려오는 예약정보 필드만 최신값으로 덮어씀
       const cachedSmBks = JSON.parse(localStorage.getItem('gamtan_smmate_bookings')||'[]');
-      const overrideMap = {};
-      cachedSmBks.forEach(b => { if(b.smmate_price_override) overrideMap[b.id] = b; });
+      const cachedMap = {};
+      cachedSmBks.forEach(b => { cachedMap[b.id] = b; });
+      const SM_FRESH_FIELDS = ['name','date','time','phone','customer_no','status','visitNote'];
       const mergedImported = imported.map(b => {
-        const ov = overrideMap[b.id];
-        if(ov) {
-          return Object.assign({}, b, {
-            smmate_price_override: true,
-            priceItems: ov.priceItems,
-            payments: ov.payments,
-          });
-        }
-        return b;
+        const cached = cachedMap[b.id];
+        if(!cached) return b;
+        const merged = Object.assign({}, cached);        // 로컬 작업상태 전부 유지
+        SM_FRESH_FIELDS.forEach(f => { merged[f] = b[f]; }); // 예약정보만 SM 최신값으로
+        merged.smmate = true;
+        merged.smmate_id = b.smmate_id;
+        return merged;
       });
       bookings = [...mergedImported, ...localOnly];
       localStorage.setItem('gamtan_bookings', JSON.stringify(bookings));
@@ -2151,14 +2152,17 @@ async function loadFromSupabase() {
         if (!matched || matched.total === 0) return b;
         const totalPaid = matched.deposit + matched.mid;
         const totalAmt = matched.total;
+        // 계약상 완납이면 8단계, 아니면 기존 단계 유지 — 단 이미 진행된 단계는 절대 내리지 않음
+        const contractStage = totalAmt > 0 && totalPaid >= totalAmt ? 8 : 0;
         return {
           ...b,
-          payments: {
+          // 가격을 직접 수정한 건은 계약 데이터로 금액을 덮어쓰지 않음
+          payments: b.smmate_price_override ? b.payments : {
             total: totalAmt,
             deposit: { amt: matched.deposit, date: '' },
             midterms: matched.mid > 0 ? [{ amt: matched.mid, date: '' }] : [],
           },
-          currentStage: totalAmt > 0 && totalPaid >= totalAmt ? 8 : (b.currentStage || 0),
+          currentStage: Math.max(b.currentStage || 0, contractStage),
           smmate_contract_no: matched.contract_no || '',
         };
       });
@@ -3711,9 +3715,28 @@ function renderGrowthAlerts() {
     overdueList.push({name:latest.name, yr:maxYr, totalYrs, date:latest.date, id:latest.id});
   });
 
-  if(!tbdList.length && !overdueList.length) { bar.innerHTML=''; return; }
+  // 3) 📞 출고연락 전 — 준비 다 끝났는데 아직 손님에게 연락 안 한 예약
+  const contactList = bookings.filter(b => needsPickupContact(b) && !b.pickupContacted);
+
+  if(!tbdList.length && !overdueList.length && !contactList.length) { bar.innerHTML=''; return; }
 
   let html = `<div style="padding:8px 10px;display:flex;flex-direction:column;gap:6px">`;
+
+  if(contactList.length) {
+    html += `<div style="background:#fff7ed;border:1.5px solid #fdba74;border-radius:10px;padding:8px 12px">
+      <div style="font-size:12px;font-weight:700;color:#c2410c;margin-bottom:5px">📞 출고연락 전 — 준비 완료 (${contactList.length}건)</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+      ${contactList.map(b=>{
+        const safeName = (b.name||'').replace(/'/g,"\\'");
+        const pd = PRODUCTS[b.product]?.name || '';
+        return `<div style="display:flex;align-items:center;justify-content:space-between;background:#fff;border-radius:7px;padding:5px 9px;border:1px solid #fdba74">
+          <span style="font-size:12px;color:#1a1a2e;font-weight:600">${escHtml(b.name)} <span style="color:#c2410c;font-size:11px">${pd}</span></span>
+          <button onclick="showCustDetail('${safeName}')" style="font-size:11px;background:#f97316;color:#fff;border:none;border-radius:6px;padding:3px 9px;cursor:pointer;font-weight:600">📞 연락하기</button>
+        </div>`;
+      }).join('')}
+      </div>
+    </div>`;
+  }
 
   if(tbdList.length) {
     html += `<div style="background:#fdf2f8;border:1.5px dashed #f9a8d4;border-radius:10px;padding:8px 12px">
@@ -3877,6 +3900,22 @@ function togglePhotoSelected(bid, custName) {
   _refreshWorkBadges(bid, b);
 }
 
+// 출고 연락 완료 토글 — 준비 다 됐고 손님에게 연락했는지
+function togglePickupContact(bid, custName) {
+  const b = bookings.find(x=>x.id===bid);
+  if(!b) return;
+  b.pickupContacted = !b.pickupContacted;
+  saveBookings();
+  const btn = document.getElementById('hist-pickup-'+bid);
+  if(btn) {
+    btn.innerHTML = b.pickupContacted ? '✅ 출고연락 완료' : '출고연락 전';
+    btn.style.borderColor = b.pickupContacted ? '#0891b2' : '#d1d5db';
+    btn.style.background   = b.pickupContacted ? '#cffafe' : '#fff';
+    btn.style.color        = b.pickupContacted ? '#0e7490' : '#9ca3af';
+  }
+  refreshHistCardHeader(bid);
+}
+
 // 2단계 작업 배지 HTML 생성 (준비 + 출고)
 function buildWorkBadge(bid, key, icon, label, safeName) {
   const b = bookings.find(x=>x.id===bid) || {workChecks:{}};
@@ -3960,6 +3999,18 @@ function getWorkItems(b) {
 // workChecks 헬퍼
 function wReady(b, key)   { return !!(b.workChecks||{})[key+'_ready']; }
 function wShipped(b, key) { return !!(b.workChecks||{})[key+'_shipped']; }
+
+// 출고연락 대상: 사진선택 완료 + 모든 작업항목 '준비(완료)' 됨 + 아직 '출고' 전부 안 됨
+// (다 만들어놓고 아직 손님에게 안 넘긴 = 지금 연락할 타이밍)
+function needsPickupContact(b) {
+  if(!b || b.cancelled || b.postponed || b.product==='id') return false;
+  if(!b.photoSelected) return false;
+  const items = getWorkItems(b);
+  if(!items.length) return false;
+  const allReady   = items.every(k => wReady(b, k));
+  const allShipped = items.every(k => wShipped(b, k));
+  return allReady && !allShipped;
+}
 function saveShipMemo(bid, key, val) {
   const b = bookings.find(x=>x.id===bid);
   if(!b) return;
@@ -4105,6 +4156,12 @@ function getDynamicStatusLabel(b) {
     if(workItems.length > 0) {
       const allShipped = workItems.every(k => wShipped(b, k));
       if(allShipped) return {label:'완료', color:'#15803d'};
+    }
+    // 준비(완료) 다 됐고 출고 전 → 출고연락 상태
+    if(needsPickupContact(b)) {
+      return b.pickupContacted
+        ? {label:'출고연락완료', color:'#0891b2'}
+        : {label:'📞 출고연락전', color:'#ea580c'};
     }
     return {label:'작업중', color:'#0891b2'};
   }
@@ -6760,6 +6817,16 @@ async function showCustDetail(name) {
     // 커스텀 추가 항목
     (b.customShipRows||[]).forEach(r => addShipRow(r.key, '', r.label));
 
+    // 출고 연락 완료 행 (준비 다 됨 → 손님에게 연락했는지)
+    const pickupContacted = !!b.pickupContacted;
+    shipRows.push(`<tr style="background:${pickupContacted?'#ecfeff':'#fafafa'};border-bottom:1px solid #f0f0f0">
+      <td style="padding:6px 8px;font-size:12px;font-weight:700;color:#374151;white-space:nowrap">📞 출고 연락</td>
+      <td colspan="4" style="padding:6px 8px">
+        <button id="hist-pickup-${b.id}" onclick="event.stopPropagation();togglePickupContact('${b.id}','${safeName}')"
+          style="font-size:11px;padding:2px 10px;border-radius:5px;border:1.5px solid ${pickupContacted?'#0891b2':'#d1d5db'};background:${pickupContacted?'#cffafe':'#fff'};color:${pickupContacted?'#0e7490':'#9ca3af'};font-weight:700;cursor:pointer">${pickupContacted?'✅ 출고연락 완료':'출고연락 전'}</button>
+      </td>
+    </tr>`);
+
     // 추가 주문 수량 조절 컨트롤
     const extraAllControls = EXTRA_ITEMS.filter(item=>!(item.key==='원본추가' && goods.originals)).map(item=>{
       const qty = parseInt(b.extraItems[item.key])||0;
@@ -6958,7 +7025,7 @@ async function showCustDetail(name) {
           </button>
           ` : `
           <button onclick="openWfForBooking('${b.id}')"
-            style="flex:1;background:#6366f1;color:#fff;border:none;border-radius:8px;padding:7px 10px;font-size:12px;cursor:pointer;font-weight:700">
+            style="display:none;flex:1;background:#6366f1;color:#fff;border:none;border-radius:8px;padding:7px 10px;font-size:12px;cursor:pointer;font-weight:700">
             📋 ${b.product==='id'?'1~2':'1~8'}단계 체크리스트
           </button>
           <button onclick="openEditModal('${b.id}')"
