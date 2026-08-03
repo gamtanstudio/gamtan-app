@@ -1926,13 +1926,24 @@ function saveCustNoToServer(name) {
     { onConflict: 'name' }
   ).then(({ error }) => { if (error) console.error('고객번호 저장 실패:', error); });
 }
+let _custNoAssigning = {};
 function getCustNo(name) {
-  if(!custNumbers[name]) {
-    if(nextCustNo < 20000) nextCustNo = 20000;
-    custNumbers[name]=nextCustNo++; saveCustNumbers();
-    saveCustNoToServer(name);  // ★ 새로 부여한 번호만 서버에도 저장(기존 번호는 안 건드림)
+  // 이미 번호가 있으면 그대로 (서버가 확정한 번호)
+  if(custNumbers[name]) return String(custNumbers[name]).padStart(5,'0');
+  // 아직 번호 없음 → 서버가 원자적으로 발급(두 대가 동시에 요청해도 같은 번호). 중복 요청 방지
+  if(name && !_custNoAssigning[name] && typeof supa!=='undefined' && currentUser){
+    _custNoAssigning[name] = true;
+    supa.rpc('assign_cust_no', { p_name: name }).then(({data, error})=>{
+      _custNoAssigning[name] = false;
+      if(!error && data != null){
+        custNumbers[name] = data;
+        try{ localStorage.setItem('gamtan_cust_numbers', JSON.stringify(custNumbers)); }catch(e){}
+        if(typeof renderAll==='function') renderAll();
+      } else if(error){ console.error('고객번호 발급 실패:', error); }
+    }).catch(e=>{ _custNoAssigning[name]=false; console.error('고객번호 발급 오류:', e); });
   }
-  return String(custNumbers[name]).padStart(5,'0');
+  // 발급 완료 전 임시 표시 (곧 서버 번호로 갱신됨)
+  return custNumbers[name] ? String(custNumbers[name]).padStart(5,'0') : '·····';
 }
 
 // ===== Supabase 연동 =====
