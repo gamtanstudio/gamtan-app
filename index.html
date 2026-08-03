@@ -2286,6 +2286,37 @@ async function loadFromSupabase() {
       custLogs = Object.assign({}, custLogs, serverLogs);
     } catch(e) { /* cust_logs 테이블 미생성 — 무시 */ }
 
+    // ★ 가족정보(cust_profiles) 서버에서 불러오기 — SM 데이터(smmate_id 등)는 안 건드리고 사용자 입력 필드만 병합
+    try {
+      const _CP_USER_FIELDS = ['familyInfo','husbandName','childNames'];
+      const cpRows = await fetchAll((from, to) =>
+        supa.from('cust_profiles').select('name,data').range(from, to));
+      const serverProf = {};
+      cpRows.forEach(r => { if (r.name) serverProf[r.name] = r.data || {}; });
+      // 로컬에만 있던 가족정보를 서버로 이관(서버에 아직 없는 것만)
+      const _cpMigrate = [];
+      Object.keys(custProfiles).forEach(nm => {
+        const p = custProfiles[nm] || {};
+        const ud = {};
+        _CP_USER_FIELDS.forEach(f => { if (p[f] != null && p[f] !== '') ud[f] = p[f]; });
+        if (Object.keys(ud).length && !serverProf[nm]) {
+          _cpMigrate.push({ name: nm, data: ud, updated_at: new Date().toISOString() });
+        }
+      });
+      if (_cpMigrate.length) {
+        try {
+          await supa.from('cust_profiles').upsert(_cpMigrate, { onConflict: 'name' });
+          _cpMigrate.forEach(r => { serverProf[r.name] = r.data; });
+        } catch(e) { console.error('가족정보 이관 실패:', e); }
+      }
+      // 사용자 필드만 병합
+      Object.keys(serverProf).forEach(nm => {
+        if (!custProfiles[nm]) custProfiles[nm] = {};
+        _CP_USER_FIELDS.forEach(f => { if (serverProf[nm][f] != null) custProfiles[nm][f] = serverProf[nm][f]; });
+      });
+      try { localStorage.setItem('gamtan_cust_profiles', JSON.stringify(custProfiles)); } catch(e) {}
+    } catch(e) { /* cust_profiles 테이블 미생성 — 무시 */ }
+
     const modalOpen = document.getElementById('add-modal')?.classList.contains('open')
       || document.getElementById('wf-modal')?.classList.contains('open');
     if (!modalOpen) {
@@ -2543,6 +2574,22 @@ function setCustProfile(name, field, val) {
   if(!custProfiles[name]) custProfiles[name] = {};
   custProfiles[name][field] = val;
   saveCustProfiles();
+  // ★ 가족정보 등 사용자 입력 필드만 서버(cust_profiles)에 저장 — SM 데이터는 제외
+  if (typeof supa !== 'undefined' && currentUser && name) {
+    const p = custProfiles[name] || {};
+    const userData = {};
+    ['familyInfo','husbandName','childNames'].forEach(f => { if (p[f] != null) userData[f] = p[f]; });
+    supa.from('cust_profiles').upsert(
+      { name, data: userData, updated_at: new Date().toISOString() },
+      { onConflict: 'name' }
+    ).then(({ error }) => {
+      if (error) {
+        console.error('가족정보 저장 실패:', error);
+        showSyncStatus('⚠️ 가족정보 저장 실패: ' + (error.message || ''));
+        alert('가족정보가 서버에 저장되지 않았어요.\n\n' + (error.message || JSON.stringify(error)) + '\n\n이 메시지를 캡처해서 알려주세요.');
+      }
+    });
+  }
 }
 function getCustProfile(name) {
   return custProfiles[name] || {};
