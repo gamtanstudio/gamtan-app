@@ -1982,7 +1982,20 @@ async function onLoginSuccess(user) {
   showSyncStatus('🔄 불러오는 중...');
 
   // ★ 2단계: 백그라운드에서 Supabase 최신 데이터 갱신 (await 없이)
-  loadFromSupabase();
+  loadFromSupabase().then(() => {
+    // 추천인 클릭으로 새 탭이 ?cust=이름 으로 열렸으면 해당 고객 카드 자동 열기
+    const _cp = new URLSearchParams(location.search).get('cust');
+    if (_cp) {
+      setTimeout(() => {
+        try {
+          if (currentView !== 'cust') setView('cust');
+          showCustDetail(decodeURIComponent(_cp));
+          const el = document.querySelector(`[data-cust-group="${CSS.escape(decodeURIComponent(_cp))}"]`);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } catch(e) {}
+      }, 400);
+    }
+  });
 }
 
 function applyRoleUI() {
@@ -6936,13 +6949,9 @@ let _editFromWfModalBid = ''; // 수정 모달이 wf-modal에서 열렸을 때 �
 
 // 어느 뷰에서 호출해도 고객카드로 이동
 function goToCust(name) {
-  if(currentView !== 'cust') setView('cust');
-  showCustDetail(name);
-  // 왼쪽 패널에서 해당 고객 그룹으로 스크롤
-  setTimeout(()=>{
-    const el = document.querySelector(`[data-cust-group="${CSS.escape(name)}"]`);
-    if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
-  }, 150);
+  if(!name) return;
+  // 같은 브라우저에서 새 탭으로 그 고객 카드 열기 (?cust=이름 → onLoginSuccess에서 자동 열림)
+  window.open(location.pathname + '?cust=' + encodeURIComponent(name), '_blank');
 }
 
 async function showCustDetail(name) {
