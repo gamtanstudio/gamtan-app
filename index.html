@@ -12,7 +12,7 @@
 html{-webkit-tap-highlight-color:transparent}
 button,[onclick]{touch-action:manipulation;cursor:pointer}
 .booking-card,.sub-card,.cl-item,.stage-header,.cust-group-header,.view-tab,.mc-entry,.mc-cell{touch-action:manipulation}
-body{font-family:'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0f2f5;height:100vh;display:flex;flex-direction:column;overflow:hidden;font-size:15px}
+body{font-family:'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0f2f5;height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden;font-size:15px}
 #header{background:#1a1a2e;color:#fff;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
 #header h1{font-size:18px;font-weight:700;letter-spacing:1px}
 #header span{font-size:13px;opacity:.6}
@@ -777,6 +777,7 @@ let userRole = 'staff';
     <button onclick="exportData()" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:600">💾 내보내기</button>
     <label style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:600">📂 가져오기<input type="file" accept=".json" onchange="importData(event)" style="display:none"></label>
     <label style="background:rgba(251,191,36,.25);color:#fef3c7;border:1px solid rgba(251,191,36,.5);border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:600">📋 SM가져오기<input type="file" accept=".xls,.xlsx,.csv" multiple onchange="importSmMate(event)" style="display:none"></label>
+    <button onclick="backfillToSupabase()" style="background:rgba(16,185,129,.35);color:#d1fae5;border:1px solid rgba(16,185,129,.7);border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:600" title="이 기기의 작업 기록(완료·출고·출고연락·금액수정)을 Supabase에 올려 다른 기기와 동기화">☁️ 전체올리기</button>
   </div>
 </div>
 <div id="main">
@@ -2180,11 +2181,34 @@ async function loadFromSupabase() {
       }
     } catch(e) { /* booking_state 테이블 미생성 — 무시 */ }
 
+    // ★ 날짜 메모 Supabase에서 불러오기 (기기 간 공유) — date_memos 테이블 없으면 건너뜀
+    try {
+      const memoRows = await fetchAll((from, to) =>
+        supa.from('date_memos').select('ds,memo').range(from, to));
+      dateMemos = {};
+      memoRows.forEach(r => { if (r.ds) dateMemos[r.ds] = r.memo; });
+    } catch(e) { /* date_memos 테이블 미생성 — 무시 */ }
+
     const modalOpen = document.getElementById('add-modal')?.classList.contains('open')
       || document.getElementById('wf-modal')?.classList.contains('open');
     if (!modalOpen) {
-      if (typeof renderMonthCal === 'function') renderMonthCal();
-      if (typeof renderList === 'function') renderList();
+      // ★ 데이터 로드 후 현재 뷰를 화면에 확실히 다시 그림 (새로고침 시 빈 화면 방지)
+      const v = (typeof currentView !== 'undefined' && currentView) ? currentView : 'month';
+      const mc = document.getElementById('month-cal');
+      const rt = document.getElementById('right');
+      if (v === 'month') {
+        if (mc) mc.classList.add('mc-active');
+        if (rt) rt.style.display = 'none';
+        if (typeof renderMonthCal === 'function') renderMonthCal();
+      } else {
+        if (mc) mc.classList.remove('mc-active');
+        if (rt) rt.style.display = '';
+        if (typeof renderList === 'function') renderList();
+        if (v === 'cust') {
+          const cn = localStorage.getItem('gamtan_cust_detail');
+          if (cn) setTimeout(()=>{ try{ showCustDetail(cn); }catch(e){} }, 30);
+        }
+      }
     } else {
       window._pendingRender = true;
     }
@@ -2194,6 +2218,32 @@ async function loadFromSupabase() {
     showSyncStatus('⚠️ 오프라인 모드');
     return false;
   }
+}
+
+// 이 기기의 작업 기록(완료·출고·출고연락·금액수정)을 Supabase에 한꺼번에 올리기
+async function backfillToSupabase() {
+  if (!currentUser) { alert('먼저 로그인해주세요.'); return; }
+  const edited = bookings.filter(b => smHasLocalState(b) && b.name && b.date);
+  const byKey = {};
+  edited.forEach(b => { byKey[bookingStateKey(b)] = b; });  // 중복 키 제거
+  const unique = Object.values(byKey);
+  if (!unique.length) { alert('올릴 작업 기록이 없어요.'); return; }
+  if (!confirm(`이 기기의 작업 기록 ${unique.length}건을 Supabase에 올립니다.\n(다른 기기에서도 보이게 돼요)\n\n진행할까요?`)) return;
+  const rows = unique.map(b => ({
+    booking_key: bookingStateKey(b),
+    state: extractBookingState(b),
+    updated_at: new Date().toISOString(),
+  }));
+  let ok = 0, fail = 0;
+  for (let i = 0; i < rows.length; i += 500) {
+    const chunk = rows.slice(i, i + 500);
+    try {
+      const { error } = await supa.from('booking_state').upsert(chunk, { onConflict: 'booking_key' });
+      if (error) { fail += chunk.length; console.error('backfill error:', error); }
+      else ok += chunk.length;
+    } catch(e) { fail += chunk.length; console.error(e); }
+  }
+  alert(`완료!\n올림: ${ok}건${fail ? `\n실패: ${fail}건 (콘솔 확인)` : ''}\n\n이제 다른 기기에서 새로고침하면 보여요.`);
 }
 
 // Supabase에 저장
@@ -6074,13 +6124,22 @@ function openAddModalForDate(ds) {
 }
 
 // 월간 인라인 메모 저장
-function mcSaveMemo(ds, val) {
-  if(val.trim()) {
-    dateMemos[ds] = val.trim();
+async function mcSaveMemo(ds, val) {
+  const v = val.trim();
+  if(v) {
+    dateMemos[ds] = v;
   } else {
     delete dateMemos[ds];
   }
-  saveDateMemos();
+  saveDateMemos();  // 로컬 캐시(하위호환)
+  // ★ Supabase 저장 — 모든 기기 공유. 테이블 없으면 조용히 스킵
+  try {
+    if(v) {
+      await supa.from('date_memos').upsert({ ds, memo: v, updated_at: new Date().toISOString() }, { onConflict: 'ds' });
+    } else {
+      await supa.from('date_memos').delete().eq('ds', ds);
+    }
+  } catch(e) { console.error('날짜메모 동기화 실패:', e); }
 }
 
 // 월간에서 메모 클릭 → 해당 날짜 주간 뷰로 이동 (fallback)
