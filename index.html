@@ -2210,6 +2210,30 @@ async function loadFromSupabase() {
       memoRows.forEach(r => { if (r.ds) dateMemos[r.ds] = r.memo; });
     } catch(e) { /* date_memos 테이블 미생성 — 무시 */ }
 
+    // ★ 고객 추가정보(방문동기·추천인·생일·기념일 등) Supabase에서 불러오기 — cust_extra 테이블 없으면 건너뜀
+    try {
+      const cxRows = await fetchAll((from, to) =>
+        supa.from('cust_extra').select('name,data').range(from, to));
+      const serverExtra = {};
+      cxRows.forEach(r => { if (r.name) serverExtra[r.name] = r.data || {}; });
+      // 로컬에만 있던 추가정보를 서버로 자동 이관(서버에 없는 것만)
+      const _cxMigrate = [];
+      Object.keys(custExtra).forEach(nm => {
+        if (!serverExtra[nm] && custExtra[nm] && Object.keys(custExtra[nm]).length) {
+          _cxMigrate.push({ name: nm, data: custExtra[nm], updated_at: new Date().toISOString() });
+        }
+      });
+      if (_cxMigrate.length) {
+        try {
+          await supa.from('cust_extra').upsert(_cxMigrate, { onConflict: 'name' });
+          _cxMigrate.forEach(r => { serverExtra[r.name] = r.data; });
+        } catch(e) { console.error('추가정보 이관 실패:', e); }
+      }
+      // 서버를 신뢰 소스로 병합(로컬 항목 보존 + 서버값 우선)
+      custExtra = Object.assign({}, custExtra, serverExtra);
+      try { localStorage.setItem('gamtan_cust_extra', JSON.stringify(custExtra)); } catch(e) {}
+    } catch(e) { /* cust_extra 테이블 미생성 — 무시 */ }
+
     const modalOpen = document.getElementById('add-modal')?.classList.contains('open')
       || document.getElementById('wf-modal')?.classList.contains('open');
     if (!modalOpen) {
@@ -2514,6 +2538,19 @@ function saveCustExtraFields(safeName, realName) {
   if(!custExtra[safeName]) custExtra[safeName] = {};
   Object.assign(custExtra[safeName], {visitMotive:motive, referrer, birthday, anniversary:anniv, weddingAnniv:wedding});
   saveCustExtra();
+  // ★ 서버(cust_extra 테이블)에도 저장 — 모든 기기 공유. 실패 시 조용히 넘어가지 않고 알림
+  (async () => {
+    try {
+      const { error } = await supa.from('cust_extra').upsert(
+        { name: safeName, data: custExtra[safeName], updated_at: new Date().toISOString() },
+        { onConflict: 'name' });
+      if (error) {
+        console.error('고객 추가정보 저장 실패:', error);
+        showSyncStatus('⚠️ 추가정보 저장 실패: ' + (error.message || ''));
+        alert('고객 추가정보가 서버에 저장되지 않았어요.\n\n' + (error.message || JSON.stringify(error)) + '\n\n이 메시지를 캡처해서 알려주세요.');
+      }
+    } catch(e) { console.error('고객 추가정보 저장 실패:', e); }
+  })();
   // 표시 뷰 갱신
   const parts = [
     motive   ? `<span style="background:#e0f2fe;color:#0369a1;border-radius:5px;padding:2px 8px;font-size:11px">🔍 ${escHtml(motive)}</span>` : '',
@@ -10413,7 +10450,7 @@ function gcClose(){
   document.getElementById('gc-dim').classList.remove('on');
 }
 window.openQuoteConsole=gcOpen;
-console.log('%c감탄 콘솔 v4 로드됨 (견적·문자·진행·상담·가격)','background:#4f46e5;color:#fff;padding:2px 6px;border-radius:3px');
+console.log('%c감탄 콘솔 v7 로드됨 (견적·문자·진행·상담·가격)','background:#4f46e5;color:#fff;padding:2px 6px;border-radius:3px');
 
 /* ---- 이벤트: 패널 안에서만 반응 ---- */
 document.addEventListener('click',e=>{
