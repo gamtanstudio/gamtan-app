@@ -1997,23 +1997,39 @@ async function onLoginSuccess(user) {
     }
     // ★ 실시간 동기화 — 다른 컴에서 바꾸면 새로고침 없이 이 화면도 자동 갱신
     setupRealtimeSync();
+    // ★ 로그인 후 서버에서 고객 카드 사진 불러오기
+    loadAllPhotosToCache().then(()=>{
+      const cn = localStorage.getItem('gamtan_cust_detail');
+      if (currentView === 'cust' && cn) { try { showCustDetail(cn); } catch(e){} }
+    });
   });
 }
 
 // ★ Supabase Realtime: 주요 테이블 변경을 구독해, 다른 기기의 저장을 감지하면 데이터 다시 불러와 화면 갱신
 let _realtimeChannel = null;
 let _rtReloadTimer = null;
+let _rtPhotoTimer = null;
 function setupRealtimeSync() {
   if (_realtimeChannel || typeof supa === 'undefined' || !currentUser) return;
   const reload = () => {
     clearTimeout(_rtReloadTimer);
     _rtReloadTimer = setTimeout(() => { loadFromSupabase(); }, 700); // 몰아치는 변경은 한 번에
   };
+  // 사진은 별도 처리 — 서버에서 사진만 다시 불러와 현재 열린 고객 카드 갱신
+  const reloadPhotos = () => {
+    clearTimeout(_rtPhotoTimer);
+    _rtPhotoTimer = setTimeout(async () => {
+      await loadAllPhotosToCache();
+      const cn = localStorage.getItem('gamtan_cust_detail');
+      if (currentView === 'cust' && cn) { try { showCustDetail(cn); } catch(e){} }
+    }, 700);
+  };
   _realtimeChannel = supa.channel('gamtan-sync');
   ['manual_bookings','cust_memos','cust_logs','cust_extra','cust_profiles','date_memos','booking_state','cust_numbers','schedules']
     .forEach(tbl => {
       _realtimeChannel.on('postgres_changes', { event: '*', schema: 'public', table: tbl }, reload);
     });
+  _realtimeChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'cust_photos' }, reloadPhotos);
   _realtimeChannel.subscribe();
 }
 
@@ -6467,51 +6483,51 @@ function initPhotoDB() {
 }
 
 function loadAllPhotosToCache() {
-  return new Promise(resolve => {
-    if(!photoDB) { resolve(); return; }
-    const req = photoDB.transaction('photos','readonly').objectStore('photos').getAll();
-    req.onsuccess = () => {
-      photoCache = {};
-      (req.result||[]).forEach(p => {
-        if(!photoCache[p.custName]) photoCache[p.custName] = [];
-        photoCache[p.custName].push(p);
+  return new Promise(async resolve => {
+    photoCache = {};
+    if(typeof supa==='undefined' || !currentUser){ resolve(); return; }
+    try {
+      let all=[], from=0; const PAGE=1000;
+      while(true){
+        const {data,error}=await supa.from('cust_photos').select('photo_id,name,data').range(from,from+PAGE-1);
+        if(error||!data||!data.length) break;
+        all=all.concat(data); if(data.length<PAGE) break; from+=PAGE;
+      }
+      all.forEach(r=>{
+        const d=r.data||{};
+        if(!photoCache[r.name]) photoCache[r.name]=[];
+        photoCache[r.name].push({id:r.photo_id, custName:r.name, thumb:d.thumb, full:d.full, filename:d.filename, bookingId:d.bookingId||null, uploadedAt:d.uploadedAt});
       });
-      resolve();
-    };
-    req.onerror = () => resolve();
+    } catch(e){ console.error('사진 불러오기 실패:', e); }
+    resolve();
   });
 }
 
 function savePhotoToDB(custName, thumb, full, filename, bookingId) {
-  return new Promise((resolve, reject) => {
-    if(!photoDB) { reject('DB not ready'); return; }
-    const record = {custName, thumb, full, filename, uploadedAt: Date.now(), bookingId: bookingId||null, driveId: null};
-    const req = photoDB.transaction('photos','readwrite').objectStore('photos').add(record);
-    req.onsuccess = () => {
-      record.id = req.result;
-      if(!photoCache[custName]) photoCache[custName] = [];
-      photoCache[custName].push(record);
-      // Drive에 썸네일 비동기 업로드 (실패해도 로컬은 유지)
-      driveUploadThumb(custName, thumb, filename, record.id, bookingId||'');
-      resolve(record);
-    };
-    req.onerror = () => reject(req.error);
+  return new Promise(async (resolve) => {
+    // ★ 고객 카드 사진을 서버(cust_photos)에 저장 — 모든 기기 공유. 고유 id로 저장
+    const pid = custName + '|' + Date.now() + '|' + Math.random().toString(36).slice(2,7);
+    const record = {id: pid, custName, thumb, full, filename, uploadedAt: Date.now(), bookingId: bookingId||null};
+    if(!photoCache[custName]) photoCache[custName] = [];
+    photoCache[custName].push(record);
+    try {
+      const { error } = await supa.from('cust_photos').upsert({
+        photo_id: pid, name: custName,
+        data: { thumb, full, filename, bookingId: bookingId||null, uploadedAt: record.uploadedAt },
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'photo_id' });
+      if(error){ console.error('사진 저장 실패:', error); toast('사진이 서버에 저장되지 않았어요: '+(error.message||'')); }
+    } catch(e){ console.error('사진 저장 오류:', e); }
+    resolve(record);
   });
 }
 
 function deletePhotoFromDB(custName, photoId) {
-  return new Promise(resolve => {
-    if(!photoDB) { resolve(); return; }
-    // Drive 삭제 (driveId 있을 때만)
-    const photo = (photoCache[custName]||[]).find(p=>p.id===photoId);
-    if(photo && photo.driveId) driveDeleteThumb(photo.driveId);
-    const tx = photoDB.transaction('photos','readwrite');
-    tx.objectStore('photos').delete(photoId);
-    tx.oncomplete = () => {
-      if(photoCache[custName]) photoCache[custName] = photoCache[custName].filter(p=>p.id!==photoId);
-      resolve();
-    };
-    tx.onerror = () => resolve();
+  return new Promise(async resolve => {
+    try { await supa.from('cust_photos').delete().eq('photo_id', photoId); }
+    catch(e){ console.error('사진 삭제 실패:', e); }
+    if(photoCache[custName]) photoCache[custName] = photoCache[custName].filter(p=>p.id!==photoId);
+    resolve();
   });
 }
 
@@ -6578,7 +6594,7 @@ function refreshHistCardPhotos(custName, bid) {
     <div id="hist-photo-${bid}" style="margin-top:8px;padding-top:8px;border-top:1px solid #f5f5f5">
       <div style="font-size:10px;color:#888;margin-bottom:5px">📷 이 방문 사진 (${bPhotos.length}장)</div>
       <div style="display:flex;gap:5px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch">
-        ${bPhotos.map((p,i)=>`<div style="position:relative;flex-shrink:0"><img src="${p.thumb}" style="width:60px;height:60px;object-fit:cover;border-radius:7px;cursor:pointer;border:1.5px solid #e8e8e8;display:block" onclick="openLightbox('${safeName}',${(photoCache[name]||[]).indexOf(p)})" title="${p.filename||''}"><button onclick="confirmDeletePhoto('${safeName}',${p.id})" style="position:absolute;top:-5px;right:-5px;width:18px;height:18px;background:#ef4444;color:#fff;border:none;border-radius:50%;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1">✕</button></div>`).join('')}
+        ${bPhotos.map((p,i)=>`<div style="position:relative;flex-shrink:0"><img src="${p.thumb}" style="width:60px;height:60px;object-fit:cover;border-radius:7px;cursor:pointer;border:1.5px solid #e8e8e8;display:block" onclick="openLightbox('${safeName}',${(photoCache[name]||[]).indexOf(p)})" title="${p.filename||''}"><button onclick="confirmDeletePhoto('${safeName}','${p.id}')" style="position:absolute;top:-5px;right:-5px;width:18px;height:18px;background:#ef4444;color:#fff;border:none;border-radius:50%;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1">✕</button></div>`).join('')}
         <label style="width:60px;height:60px;border:2px dashed #ddd;border-radius:7px;cursor:pointer;display:flex;align-items:center;justify-content:center;background:#fff;flex-shrink:0;color:#ccc;font-size:20px">
           ＋<input type="file" accept="image/*" multiple onchange="handlePhotoFiles('${safeName}',this.files,'${bid}');this.value=''" style="display:none">
         </label>
@@ -6633,7 +6649,7 @@ function buildCustPhotoSection(custName) {
     <div style="position:relative;display:inline-block;flex-shrink:0">
       <img src="${p.thumb}" style="width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid #e8e8e8;display:block"
         onclick="openLightbox('${custName}',${i})" title="${p.filename||''}">
-      <button onclick="confirmDeletePhoto('${custName}',${p.id})"
+      <button onclick="confirmDeletePhoto('${custName}','${p.id}')"
         style="position:absolute;top:-5px;right:-5px;width:18px;height:18px;background:#ef4444;color:#fff;border:none;border-radius:50%;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s;padding:0;line-height:1">✕</button>
     </div>`).join('');
   return `<div id="cust-photo-section-${enc}"
@@ -6661,7 +6677,7 @@ function buildPhotoSection(custName, bookingId) {
     <div class="photo-thumb-wrap">
       <img src="${p.thumb}" class="photo-thumb" title="${p.filename}"
         onclick="openLightbox('${custName}',${i})">
-      <button class="photo-del-btn" onclick="confirmDeletePhoto('${custName}',${p.id})">✕</button>
+      <button class="photo-del-btn" onclick="confirmDeletePhoto('${custName}','${p.id}')">✕</button>
     </div>`).join('');
   return `<div id="photo-section-wf" class="photo-section">
     <div class="photo-section-header">
@@ -7242,7 +7258,7 @@ async function showCustDetail(name) {
       <div id="hist-photo-${b.id}" style="margin-top:8px;padding-top:8px;border-top:1px solid #f5f5f5">
         <div style="font-size:10px;color:#888;margin-bottom:5px">📷 이 방문 사진 (${bPhotos.length}장)</div>
         <div style="display:flex;gap:5px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch">
-          ${bPhotos.map((p,i)=>`<div style="position:relative;flex-shrink:0"><img src="${p.thumb}" style="width:60px;height:60px;object-fit:cover;border-radius:7px;cursor:pointer;border:1.5px solid #e8e8e8;display:block" onclick="openLightbox('${safeName}',${(photoCache[name]||[]).indexOf(p)})" title="${p.filename||''}"><button onclick="confirmDeletePhoto('${safeName}',${p.id})" style="position:absolute;top:-5px;right:-5px;width:18px;height:18px;background:#ef4444;color:#fff;border:none;border-radius:50%;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1">✕</button></div>`).join('')}
+          ${bPhotos.map((p,i)=>`<div style="position:relative;flex-shrink:0"><img src="${p.thumb}" style="width:60px;height:60px;object-fit:cover;border-radius:7px;cursor:pointer;border:1.5px solid #e8e8e8;display:block" onclick="openLightbox('${safeName}',${(photoCache[name]||[]).indexOf(p)})" title="${p.filename||''}"><button onclick="confirmDeletePhoto('${safeName}','${p.id}')" style="position:absolute;top:-5px;right:-5px;width:18px;height:18px;background:#ef4444;color:#fff;border:none;border-radius:50%;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1">✕</button></div>`).join('')}
           <label style="width:60px;height:60px;border:2px dashed #ddd;border-radius:7px;cursor:pointer;display:flex;align-items:center;justify-content:center;background:#fff;flex-shrink:0;color:#ccc;font-size:20px">
             ＋<input type="file" accept="image/*" multiple onchange="handlePhotoFiles('${safeName}',this.files,'${b.id}');this.value=''" style="display:none">
           </label>
