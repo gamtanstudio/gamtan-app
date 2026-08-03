@@ -2053,6 +2053,27 @@ async function loadFromSupabase() {
 
       const localBks = JSON.parse(localStorage.getItem('gamtan_bookings')||'[]');
       const localOnly = localBks.filter(b => !b.smmate);
+
+      // ★ 손으로 넣은 예약을 manual_bookings(서버)에서 불러오기 — 모든 기기 공유
+      let manualBks = [];
+      try {
+        const mbRows = await fetchAll((from, to) =>
+          supa.from('manual_bookings').select('id,data').range(from, to));
+        manualBks = mbRows.map(r => r.data).filter(b => b && b.name && b.id);
+      } catch(e) { console.error('수동예약 불러오기 실패:', e); }
+
+      // ★ 로컬에만 있던 기존 수동예약(서버에 아직 없는 것)을 서버로 자동 이관 — 한 번 올라가면 이후엔 서버가 소스
+      const _serverIds = new Set(manualBks.map(b => b.id));
+      const _toMigrate = localOnly.filter(b => b.id && !_serverIds.has(b.id));
+      if (_toMigrate.length > 0) {
+        try {
+          const { error: migErr } = await supa.from('manual_bookings').upsert(
+            _toMigrate.map(b => ({ id: b.id, data: b, updated_at: new Date().toISOString() })),
+            { onConflict: 'id' });
+          if (!migErr) manualBks = [...manualBks, ..._toMigrate];
+          else console.error('기존 예약 이관 실패:', migErr);
+        } catch(e) { console.error('기존 예약 이관 실패:', e); }
+      }
       // ★ SM 예약의 로컬 작업상태 전체 보존
       // 캐시(로컬에서 손댄 모든 상태: 사진선택·준비/출고 체크·가격수정·단계 등)를 베이스로 두고,
       // SM메이트에서 새로 내려오는 예약정보 필드만 최신값으로 덮어씀
@@ -2071,9 +2092,9 @@ async function loadFromSupabase() {
         merged.smmate_id = b.smmate_id;
         return merged;
       });
-      bookings = [...mergedImported, ...localOnly];
-      // 직접 등록분만 저장(소량), 편집된 SM만 소용량 키에 — 거대 캐시는 폐기(용량 초과 원인)
-      try { localStorage.setItem('gamtan_bookings', JSON.stringify(localOnly)); } catch(e) {}
+      bookings = [...mergedImported, ...manualBks];
+      // 직접 등록분은 manual_bookings(서버)가 신뢰 소스 — 로컬은 캐시로만 유지
+      try { localStorage.setItem('gamtan_bookings', JSON.stringify(manualBks)); } catch(e) {}
       try { localStorage.setItem('gamtan_sm_edits', JSON.stringify(mergedImported.filter(b=>smHasLocalState(b)))); } catch(e) {}
       try { localStorage.removeItem('gamtan_smmate_bookings'); } catch(e) {}
     }
@@ -2250,22 +2271,25 @@ async function backfillToSupabase() {
 async function syncToSupabase() {
   if (!currentUser) return;
   try {
-    // 새 예약(sm_ 아닌 것)만 저장
-    const newBks = bookings.filter(b => !b.smmate);
+    // 손으로 넣은 예약(sm_ 아닌 것)만 manual_bookings 테이블에 저장
+    // ★ id를 고정키로 upsert → 수정해도 중복 안 쌓임. 예약 객체 전체를 data(jsonb)에 보존
+    const newBks = bookings.filter(b => !b.smmate && b.id);
     if (newBks.length > 0) {
-      await supa.from('schedules').upsert(
+      const { error: mbErr } = await supa.from('manual_bookings').upsert(
         newBks.map(b => ({
-          smmate_id: null,
-          schedule_type: ' 촬영',
-          schedule_date: b.date,
-          schedule_time: b.time,
-          customer_name: b.name,
-          phone: b.phone || '',
-          memo: b.memo || '',
-          title: b.name,
-          status: b.cancelled ? '취소' : '예약',
-        }))
+          id: b.id,
+          data: b,
+          updated_at: new Date().toISOString(),
+        })),
+        { onConflict: 'id' }
       );
+      // ★ 조용한 실패 제거 — 저장 거부되면 화면에 그대로 알림
+      if (mbErr) {
+        console.error('수동예약 저장 실패:', mbErr);
+        showSyncStatus('⚠️ 예약 저장 실패: ' + (mbErr.message || mbErr.code || ''));
+        alert('예약이 서버에 저장되지 않았어요.\n\n' + (mbErr.message || JSON.stringify(mbErr)) + '\n\n이 메시지를 캡처해서 알려주세요.');
+        return; // 실패했는데 '저장됨'으로 넘어가지 않도록 중단
+      }
     }
     // ★ 작업 상태(완료/출고/출고연락/금액수정 등) Supabase 저장 — 기기 간 동기화
     // booking_state 테이블이 아직 없으면 조용히 건너뜀 (localStorage로 계속 동작)
