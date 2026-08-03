@@ -2468,19 +2468,24 @@ async function toggleDelivery(productId, isDone, checkbox) {
     checkbox.checked = !isDone;
   }
 }
-function saveCustMemos() {
-  // Supabase customers 테이블 memo 컬럼에 저장
-  if (typeof supa !== 'undefined' && currentUser) {
-    Object.entries(custMemos).forEach(async ([name, memo]) => {
-      const custId = custNumbers[name];
-      if (custId && custId < 20000) {
-        // SM메이트 고객 - id로 업데이트
-        await supa.from('customers').update({ memo }).eq('id', custId);
-      }
-    });
-  }
-  // 로컬에도 저장
+function saveCustMemos(onlyName) {
+  // 로컬은 항상 즉시 저장
   try { localStorage.setItem('gamtan_cust_memos', JSON.stringify(custMemos)); } catch(e) {}
+  // ★ 서버 저장은 지정된 고객 1명만 — 예전엔 매 호출마다 모든 고객을 update해서 타이핑이 심하게 느렸음
+  if (typeof supa !== 'undefined' && currentUser && onlyName) {
+    const custId = custNumbers[onlyName];
+    if (custId && custId < 20000) {
+      supa.from('customers').update({ memo: custMemos[onlyName] || '' }).eq('id', custId)
+        .then(({ error }) => { if (error) console.error('상담메모 저장 실패:', error); });
+    }
+  }
+}
+// 상담메모 타이핑용 — 화면·로컬은 즉시, 서버 저장은 타이핑 멈춘 0.8초 뒤 1회(그 고객만)
+let _custMemoTimers = {};
+function debouncedSaveCustMemo(name) {
+  try { localStorage.setItem('gamtan_cust_memos', JSON.stringify(custMemos)); } catch(e) {}
+  clearTimeout(_custMemoTimers[name]);
+  _custMemoTimers[name] = setTimeout(() => saveCustMemos(name), 800);
 }
 function saveCustProfiles() { localStorage.setItem('gamtan_cust_profiles', JSON.stringify(custProfiles)); }
 function setCustProfile(name, field, val) {
@@ -3761,7 +3766,7 @@ function doGoExistCust(name, phone, memo) {
     const latest = bookings.filter(b=>b.name===name).sort((a,b)=>b.date.localeCompare(a.date))[0];
     if(latest && !latest.phone) { latest.phone = phone; saveBookings(); }
   }
-  if(memo) { custMemos[name] = (custMemos[name] ? custMemos[name]+'\n' : '') + memo; saveCustMemos(); }
+  if(memo) { custMemos[name] = (custMemos[name] ? custMemos[name]+'\n' : '') + memo; saveCustMemos(name); }
   const cr2 = document.getElementById('cust-popup-result');
   if(cr2) cr2.innerHTML = '';
   stageFilter = null;
@@ -3783,7 +3788,7 @@ function doRegNewCust(name, phone, memo) {
     cancelled: false
   });
   saveBookings();
-  if(memo) { custMemos[name] = (custMemos[name] ? custMemos[name]+'\n' : '') + memo; saveCustMemos(); }
+  if(memo) { custMemos[name] = (custMemos[name] ? custMemos[name]+'\n' : '') + memo; saveCustMemos(name); }
   const cr2 = document.getElementById('cust-popup-result');
   if(cr2) cr2.innerHTML = '';
   stageFilter = null;
@@ -5704,7 +5709,7 @@ function saveBooking() {
         if(custMemos[old.name]) {
           custMemos[name] = (custMemos[name] ? custMemos[name] + '\n' : '') + custMemos[old.name];
           delete custMemos[old.name];
-          saveCustMemos();
+          saveCustMemos(name);
         }
         // 활동 로그 이전
         if(custLogs[old.name]) {
@@ -7372,7 +7377,7 @@ async function showCustDetail(name) {
         <textarea id="cust-memo-ta-main"
           placeholder="상담 메모"
           style="width:100%;box-sizing:border-box;border:none;background:transparent;font-size:13px;color:#333;resize:none;outline:none;font-family:inherit;line-height:1.7;overflow:hidden;min-height:40px"
-          oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px';custMemos['${safeName}']=this.value;saveCustMemos()"
+          oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px';custMemos['${safeName}']=this.value;debouncedSaveCustMemo('${safeName}')"
           onload="this.style.height=this.scrollHeight+'px'"
         >${escHtml(custMemo)}</textarea>
       </div>
