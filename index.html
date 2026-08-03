@@ -1916,10 +1916,21 @@ function saveCustNumbers() {
   localStorage.setItem('gamtan_cust_numbers', JSON.stringify(custNumbers));
   localStorage.setItem('gamtan_next_cust_no', String(nextCustNo));
 }
+// ★ 수동 고객번호(20000+)를 서버 cust_numbers에 저장 — 기기 바꿔도 유지. SM번호(20000 미만)는 customers가 소스라 제외
+function saveCustNoToServer(name) {
+  if (typeof supa === 'undefined' || !currentUser || !name) return;
+  const no = custNumbers[name];
+  if (!(no >= 20000)) return;
+  supa.from('cust_numbers').upsert(
+    { name, no, updated_at: new Date().toISOString() },
+    { onConflict: 'name' }
+  ).then(({ error }) => { if (error) console.error('고객번호 저장 실패:', error); });
+}
 function getCustNo(name) {
   if(!custNumbers[name]) {
     if(nextCustNo < 20000) nextCustNo = 20000;
     custNumbers[name]=nextCustNo++; saveCustNumbers();
+    saveCustNoToServer(name);  // ★ 새로 부여한 번호만 서버에도 저장(기존 번호는 안 건드림)
   }
   return String(custNumbers[name]).padStart(5,'0');
 }
@@ -2316,6 +2327,32 @@ async function loadFromSupabase() {
       });
       try { localStorage.setItem('gamtan_cust_profiles', JSON.stringify(custProfiles)); } catch(e) {}
     } catch(e) { /* cust_profiles 테이블 미생성 — 무시 */ }
+
+    // ★ 수동 고객번호(cust_numbers) 서버에서 불러오기 + 로컬 이관 + 새 번호 카운터를 서버 최대치 기준으로
+    try {
+      const cnRows = await fetchAll((from, to) =>
+        supa.from('cust_numbers').select('name,no').range(from, to));
+      const serverNos = {};
+      cnRows.forEach(r => { if (r.name && r.no != null) serverNos[r.name] = r.no; });
+      // 로컬에만 있던 수동번호(20000+)를 서버로 이관
+      const _cnMig = [];
+      Object.keys(custNumbers).forEach(nm => {
+        const no = custNumbers[nm];
+        if (no >= 20000 && serverNos[nm] == null) _cnMig.push({ name: nm, no, updated_at: new Date().toISOString() });
+      });
+      if (_cnMig.length) {
+        try { await supa.from('cust_numbers').upsert(_cnMig, { onConflict: 'name' }); _cnMig.forEach(r => { serverNos[r.name] = r.no; }); }
+        catch(e) { console.error('고객번호 이관 실패:', e); }
+      }
+      // 서버 수동번호를 custNumbers에 병합(SM 번호는 customers가 소스라 20000+ 만, 기존 값 안 덮음)
+      Object.keys(serverNos).forEach(nm => { if (serverNos[nm] >= 20000 && !custNumbers[nm]) custNumbers[nm] = serverNos[nm]; });
+      // 새 번호 카운터를 전체 최대 +1로(서버 기준, 최소 20000) — 여러 기기에서 만들어도 안 겹치게
+      let maxNo = 19999;
+      Object.values(custNumbers).forEach(n => { if (typeof n === 'number' && n > maxNo) maxNo = n; });
+      Object.values(serverNos).forEach(n => { if (n > maxNo) maxNo = n; });
+      nextCustNo = Math.max(20000, maxNo + 1);
+      try { localStorage.setItem('gamtan_cust_numbers', JSON.stringify(custNumbers)); localStorage.setItem('gamtan_next_cust_no', String(nextCustNo)); } catch(e) {}
+    } catch(e) { /* cust_numbers 테이블 미생성 — 무시 */ }
 
     const modalOpen = document.getElementById('add-modal')?.classList.contains('open')
       || document.getElementById('wf-modal')?.classList.contains('open');
@@ -10286,9 +10323,52 @@ const DAY=86400000;
 const JXKEY='gamtan_jobmeta_v1';
 let JMETA={};      // { [id]: {sentAt, pickedAt, picks, memo, photos:[], manual?, name?, date?, prod?} }
 let jmOK=true;
-function jmLoad(){ try{ JMETA=JSON.parse(localStorage.getItem(JXKEY)||'{}'); jmOK=true; }catch(e){ JMETA={}; jmOK=false; } }
-function jmSave(){ try{ localStorage.setItem(JXKEY, JSON.stringify(JMETA)); jmOK=true; return true; }
-  catch(e){ jmOK=false; toast('저장 공간이 꽉 찼어요. 사진을 줄여 주세요.'); return false; } }
+async function jmLoad(){
+  // 1) 로컬 먼저(빠른 초기 표시)
+  try{ JMETA=JSON.parse(localStorage.getItem(JXKEY)||'{}'); jmOK=true; }catch(e){ JMETA={}; jmOK=false; }
+  // 2) 서버(job_meta)에서 최신 로드 + 로컬에만 있던 것 자동 이관
+  if(typeof supa!=='undefined' && currentUser){
+    try{
+      let all=[], from=0; const PAGE=1000;
+      while(true){
+        const {data,error}=await supa.from('job_meta').select('id,data').range(from,from+PAGE-1);
+        if(error||!data||!data.length) break;
+        all=all.concat(data); if(data.length<PAGE) break; from+=PAGE;
+      }
+      const server={};
+      all.forEach(r=>{ if(r.id) server[r.id]=r.data||{}; });
+      const mig=[];
+      Object.keys(JMETA).forEach(id=>{ if(!server[id] && JMETA[id]) mig.push({id, data:JMETA[id], updated_at:new Date().toISOString()}); });
+      if(mig.length){ try{ await supa.from('job_meta').upsert(mig,{onConflict:'id'}); mig.forEach(r=>server[r.id]=r.data); }catch(e){ console.error('진행관리 이관 실패:',e); } }
+      JMETA=Object.assign({}, JMETA, server);
+      try{ localStorage.setItem(JXKEY, JSON.stringify(JMETA)); }catch(e){}
+      jmOK=true;
+      if(typeof renderJobs==='function' && typeof gTab!=='undefined' && gTab==='jobs') renderJobs();
+    }catch(e){ console.error('진행관리 불러오기 실패:',e); }
+  }
+}
+function jmSave(id){
+  // 로컬 저장(하위호환·오프라인 캐시)
+  let ok=true;
+  try{ localStorage.setItem(JXKEY, JSON.stringify(JMETA)); jmOK=true; }
+  catch(e){ jmOK=false; toast('로컬 저장공간이 꽉 찼어요. (서버엔 저장됩니다)'); ok=false; }
+  // ★ 서버(job_meta)에 그 건만 저장 — 사진 포함 온라인 공유. id 없으면 로컬만
+  if(id && typeof supa!=='undefined' && currentUser){
+    supa.from('job_meta').upsert(
+      { id, data: JMETA[id]||{}, updated_at:new Date().toISOString() },
+      { onConflict:'id' }
+    ).then(({error})=>{ if(error) console.error('진행관리 저장 실패:',error); });
+    ok=true; // 서버 저장 경로가 있으므로 로컬 실패해도 진행상태는 안전
+  }
+  return ok;
+}
+function jmDelete(id){
+  try{ localStorage.setItem(JXKEY, JSON.stringify(JMETA)); }catch(e){}
+  if(typeof supa!=='undefined' && currentUser){
+    supa.from('job_meta').delete().eq('id',id)
+      .then(({error})=>{ if(error) console.error('진행관리 삭제 실패:',error); });
+  }
+}
 function meta(id){ return JMETA[id] || (JMETA[id]={sentAt:'',pickedAt:'',picks:'',memo:'',photos:[]}); }
 
 const d0=s=>{ if(!s) return null; const d=new Date(s+'T00:00:00'); return isNaN(d)?null:d.getTime(); };
@@ -10483,20 +10563,20 @@ function jSetStageManual(id,k){
   if(k==='picked'){ delete m.framedAt; delete m.doneAt; }
   if(k==='framed'){ delete m.doneAt; }
   Object.keys(notified).forEach(x=>{ if(x.startsWith(id)) delete notified[x]; });
-  jmSave(); renderJobs();
+  jmSave(id); renderJobs();
 }
 async function jAddPhotoTo(id,files){
   const m=meta(id); m.photos=m.photos||[];
   for(const f of files){ if(!f.type.startsWith('image/')) continue;
     try{ m.photos.push(await shrink(f)); }catch(e){ toast('이 사진은 못 읽었어요'); } }
-  if(jmSave()) renderJobs(); else { m.photos.pop(); renderJobs(); }
+  if(jmSave(id)) renderJobs(); else { m.photos.pop(); renderJobs(); }
 }
 function jAddManual(){
   const name=$('#jm_name').value.trim(), date=$('#jm_date').value, prod=$('#jm_prod').value;
   if(!name){ toast('고객 성함을 넣어주세요'); return; }
   const id='man:'+Date.now().toString(36);
   JMETA[id]={manual:true,name,date,prod,cs:3,sentAt:'',pickedAt:'',picks:'',memo:'',photos:[]};
-  jmSave(); $('#jm_name').value=''; renderJobs();
+  jmSave(id); $('#jm_name').value=''; renderJobs();
 }
 
 /* ---- 이 모듈 전용 (CRM 전역과 절대 안 섞임) ---- */
@@ -10609,14 +10689,14 @@ document.addEventListener('click',e=>{
     inp.onchange=()=>jAddPhotoTo(id,[...inp.files]); inp.click(); return; }
   const jrm=t.closest('[data-jrm]');
   if(jrm){ const [id,n]=jrm.dataset.jrm.split('|'); const m=meta(id);
-    if(m.photos){ m.photos.splice(+n,1); jmSave(); renderJobs(); } return; }
+    if(m.photos){ m.photos.splice(+n,1); jmSave(id); renderJobs(); } return; }
   const jz=t.closest('[data-jzoom]');
   if(jz){ const [id,n]=jz.dataset.jzoom.split('|'); const m=meta(id);
     if(m.photos&&m.photos[+n]){ $('#gc-lbimg').src=m.photos[+n]; $('#gc-lb').classList.add('on'); } return; }
   if(t.closest('#gc-lb')){ $('#gc-lb').classList.remove('on'); $('#gc-lbimg').src=''; return; }
   const jdel=t.closest('[data-jdel]');
   if(jdel){ const id=jdel.dataset.jdel;
-    if(confirm('이 수동 등록 건을 지울까요?')){ delete JMETA[id]; jmSave(); renderJobs(); } return; }
+    if(confirm('이 수동 등록 건을 지울까요?')){ delete JMETA[id]; jmDelete(id); renderJobs(); } return; }
   const jtm=t.closest('[data-jtomsg]');
   if(jtm){ const j=allJobs().find(x=>x.id===jtm.dataset.jtomsg);
     if(j){ if(j.prod&&PRODUCTS[j.prod]) S.prod=j.prod;
@@ -10650,7 +10730,7 @@ document.addEventListener('input',e=>{
   const jm=t.closest('[data-jm]');
   if(jm){ const [id,k]=jm.dataset.jm.split('|'); const m=meta(id); m[k]=t.value;
     Object.keys(notified).forEach(x=>{ if(x.startsWith(id)) delete notified[x]; });
-    jmSave(); if(k==='sentAt'||k==='pickedAt') renderJobs(); return; }
+    jmSave(id); if(k==='sentAt'||k==='pickedAt') renderJobs(); return; }
   const pr=t.closest('[data-gprice]');
   if(pr){ PRICE[pr.dataset.gprice]=Math.max(0,parseInt(pr.value)||0);
     pr.classList.toggle('unset',PRICE[pr.dataset.gprice]<=0); return; }
