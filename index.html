@@ -1873,14 +1873,22 @@ function selectReferrer(safeName, val) {
   const input = document.getElementById('cx-referrer-'+safeName);
   if(input) input.value = val;
 }
-function saveCustLogs() { scheduleSyncToSupabase(); }
+function saveCustLogs(name) {
+  // ★ 활동기록을 cust_logs 테이블(서버)에 저장 — 예전엔 아무 데도 저장 안 돼 새로고침하면 사라졌음
+  if (typeof supa !== 'undefined' && currentUser && name) {
+    supa.from('cust_logs').upsert(
+      { name, logs: custLogs[name] || [], updated_at: new Date().toISOString() },
+      { onConflict: 'name' }
+    ).then(({ error }) => { if (error) console.error('활동기록 저장 실패:', error); });
+  }
+}
 function addCustLog(name, text) {
   if(!custLogs[name]) custLogs[name] = [];
   const now = new Date();
   const dt = now.toISOString().slice(0,10);
   const tm = now.toTimeString().slice(0,5);
   custLogs[name].unshift({dt, tm, text});
-  saveCustLogs();
+  saveCustLogs(name);
 }
 function addLogFromInput(safeName, realName) {
   const el = document.getElementById('cust-log-input-'+safeName);
@@ -2234,6 +2242,50 @@ async function loadFromSupabase() {
       try { localStorage.setItem('gamtan_cust_extra', JSON.stringify(custExtra)); } catch(e) {}
     } catch(e) { /* cust_extra 테이블 미생성 — 무시 */ }
 
+    // ★ 상담메모(cust_memos) 서버에서 불러오기 + 로컬에만 있던 것 자동 복구
+    try {
+      const cmRows = await fetchAll((from, to) =>
+        supa.from('cust_memos').select('name,memo').range(from, to));
+      const serverMemos = {};
+      cmRows.forEach(r => { if (r.name) serverMemos[r.name] = r.memo || ''; });
+      // 로컬에만 있던 상담메모를 서버로 이관(서버에 아직 없는 것만)
+      const _cmMigrate = [];
+      Object.keys(custMemos).forEach(nm => {
+        if (!(nm in serverMemos) && custMemos[nm] && custMemos[nm].trim()) {
+          _cmMigrate.push({ name: nm, memo: custMemos[nm], updated_at: new Date().toISOString() });
+        }
+      });
+      if (_cmMigrate.length) {
+        try {
+          await supa.from('cust_memos').upsert(_cmMigrate, { onConflict: 'name' });
+          _cmMigrate.forEach(r => { serverMemos[r.name] = r.memo; });
+        } catch(e) { console.error('상담메모 이관 실패:', e); }
+      }
+      custMemos = Object.assign({}, custMemos, serverMemos);
+      try { localStorage.setItem('gamtan_cust_memos', JSON.stringify(custMemos)); } catch(e) {}
+    } catch(e) { /* cust_memos 테이블 미생성 — 무시 */ }
+
+    // ★ 활동기록(cust_logs) 서버에서 불러오기 + 로컬(메모리)에 남은 것 자동 이관
+    try {
+      const clRows = await fetchAll((from, to) =>
+        supa.from('cust_logs').select('name,logs').range(from, to));
+      const serverLogs = {};
+      clRows.forEach(r => { if (r.name) serverLogs[r.name] = Array.isArray(r.logs) ? r.logs : []; });
+      const _clMigrate = [];
+      Object.keys(custLogs).forEach(nm => {
+        if (!(nm in serverLogs) && Array.isArray(custLogs[nm]) && custLogs[nm].length) {
+          _clMigrate.push({ name: nm, logs: custLogs[nm], updated_at: new Date().toISOString() });
+        }
+      });
+      if (_clMigrate.length) {
+        try {
+          await supa.from('cust_logs').upsert(_clMigrate, { onConflict: 'name' });
+          _clMigrate.forEach(r => { serverLogs[r.name] = r.logs; });
+        } catch(e) { console.error('활동기록 이관 실패:', e); }
+      }
+      custLogs = Object.assign({}, custLogs, serverLogs);
+    } catch(e) { /* cust_logs 테이블 미생성 — 무시 */ }
+
     const modalOpen = document.getElementById('add-modal')?.classList.contains('open')
       || document.getElementById('wf-modal')?.classList.contains('open');
     if (!modalOpen) {
@@ -2469,15 +2521,14 @@ async function toggleDelivery(productId, isDone, checkbox) {
   }
 }
 function saveCustMemos(onlyName) {
-  // 로컬은 항상 즉시 저장
+  // 로컬은 항상 즉시 저장(용량 초과 시 조용히 실패할 수 있어 서버가 신뢰 소스)
   try { localStorage.setItem('gamtan_cust_memos', JSON.stringify(custMemos)); } catch(e) {}
-  // ★ 서버 저장은 지정된 고객 1명만 — 예전엔 매 호출마다 모든 고객을 update해서 타이핑이 심하게 느렸음
+  // ★ 상담메모를 cust_memos 테이블(서버)에 저장 — 그 고객 1명만. 로컬 용량 문제와 무관하게 안전 보관
   if (typeof supa !== 'undefined' && currentUser && onlyName) {
-    const custId = custNumbers[onlyName];
-    if (custId && custId < 20000) {
-      supa.from('customers').update({ memo: custMemos[onlyName] || '' }).eq('id', custId)
-        .then(({ error }) => { if (error) console.error('상담메모 저장 실패:', error); });
-    }
+    supa.from('cust_memos').upsert(
+      { name: onlyName, memo: custMemos[onlyName] || '', updated_at: new Date().toISOString() },
+      { onConflict: 'name' }
+    ).then(({ error }) => { if (error) console.error('상담메모 저장 실패:', error); });
   }
 }
 // 상담메모 타이핑용 — 화면·로컬은 즉시, 서버 저장은 타이핑 멈춘 0.8초 뒤 1회(그 고객만)
@@ -5715,7 +5766,7 @@ function saveBooking() {
         if(custLogs[old.name]) {
           custLogs[name] = [...(custLogs[name]||[]), ...custLogs[old.name]];
           delete custLogs[old.name];
-          saveCustLogs();
+          saveCustLogs(name);
         }
         // 상담 예약 자체를 이름만 바꿔서 유지 (기록 남김)
         old.name = name;
