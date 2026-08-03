@@ -1995,7 +1995,26 @@ async function onLoginSuccess(user) {
         } catch(e) {}
       }, 400);
     }
+    // ★ 실시간 동기화 — 다른 컴에서 바꾸면 새로고침 없이 이 화면도 자동 갱신
+    setupRealtimeSync();
   });
+}
+
+// ★ Supabase Realtime: 주요 테이블 변경을 구독해, 다른 기기의 저장을 감지하면 데이터 다시 불러와 화면 갱신
+let _realtimeChannel = null;
+let _rtReloadTimer = null;
+function setupRealtimeSync() {
+  if (_realtimeChannel || typeof supa === 'undefined' || !currentUser) return;
+  const reload = () => {
+    clearTimeout(_rtReloadTimer);
+    _rtReloadTimer = setTimeout(() => { loadFromSupabase(); }, 700); // 몰아치는 변경은 한 번에
+  };
+  _realtimeChannel = supa.channel('gamtan-sync');
+  ['manual_bookings','cust_memos','cust_logs','cust_extra','cust_profiles','date_memos','booking_state','cust_numbers','schedules']
+    .forEach(tbl => {
+      _realtimeChannel.on('postgres_changes', { event: '*', schema: 'public', table: tbl }, reload);
+    });
+  _realtimeChannel.subscribe();
 }
 
 function applyRoleUI() {
@@ -2721,8 +2740,8 @@ function saveCustExtraFields(safeName, realName) {
     birthday ? `<span style="background:#fef3c7;color:#92400e;border-radius:5px;padding:2px 8px;font-size:11px">🎂 ${escHtml(birthday)}</span>` : '',
     anniv    ? `<span style="background:#fce7f3;color:#9d174d;border-radius:5px;padding:2px 8px;font-size:11px">🎉 기념일 ${escHtml(anniv)}</span>` : '',
     wedding  ? `<span style="background:#ffe4e6;color:#9f1239;border-radius:5px;padding:2px 8px;font-size:11px">💍 결혼기념일 ${escHtml(wedding)}</span>` : '',
-    referrer ? `<span onclick="goToCust('${findCustByReferrerStr(referrer).replace(/'/g,"\\'")}'" style="background:#f0fdf4;color:#166534;border-radius:5px;padding:2px 8px;font-size:11px;cursor:pointer;text-decoration:underline;text-underline-offset:2px">👤 추천인: ${escHtml(referrerDisplayName(referrer))}${referrerPhone(referrer)?` <span style="color:#888;font-size:10px">(${referrerPhone(referrer)})</span>`:''} →</span>` : '',
-    (()=>{ const ref2=Object.entries(custExtra).filter(([k,v])=>v.referrer&&findCustByReferrerStr(v.referrer)===realName).map(([k])=>k); return ref2.length?`<span style="background:#f0fdf4;color:#166534;border-radius:5px;padding:2px 8px;font-size:11px">🌱 추천한 고객: ${ref2.map(r=>`<span onclick="goToCust('${r.replace(/'/g,"\\'")}'"  style="cursor:pointer;text-decoration:underline;font-weight:700">${escHtml(r)}</span>`).join(', ')}</span>`:''; })(),
+    referrer ? `<span onclick="goToCust('${findCustByReferrerStr(referrer).replace(/'/g,"\\'")}')" style="background:#f0fdf4;color:#166534;border-radius:5px;padding:2px 8px;font-size:11px;cursor:pointer;text-decoration:underline;text-underline-offset:2px">👤 추천인: ${escHtml(referrerDisplayName(referrer))}${referrerPhone(referrer)?` <span style="color:#888;font-size:10px">(${referrerPhone(referrer)})</span>`:''} →</span>` : '',
+    (()=>{ const ref2=Object.entries(custExtra).filter(([k,v])=>v.referrer&&findCustByReferrerStr(v.referrer)===realName).map(([k])=>k); return ref2.length?`<span style="background:#f0fdf4;color:#166534;border-radius:5px;padding:2px 8px;font-size:11px">🌱 추천한 고객: ${ref2.map(r=>`<span onclick="goToCust('${r.replace(/'/g,"\\'")}')"  style="cursor:pointer;text-decoration:underline;font-weight:700">${escHtml(r)}</span>`).join(', ')}</span>`:''; })(),
   ].filter(Boolean).join(' ');
   const viewEl = document.getElementById('cust-extra-view-'+safeName);
   const editEl = document.getElementById('cust-extra-edit-'+safeName);
@@ -7452,10 +7471,10 @@ async function showCustDetail(name) {
           cx.birthday    ? `<span style="background:#fef3c7;color:#92400e;border-radius:5px;padding:2px 8px;font-size:11px">🎂 ${escHtml(cx.birthday)}</span>` : '',
           cx.anniversary ? `<span style="background:#fce7f3;color:#9d174d;border-radius:5px;padding:2px 8px;font-size:11px">🎉 기념일 ${escHtml(cx.anniversary)}</span>` : '',
           cx.weddingAnniv? `<span style="background:#ffe4e6;color:#9f1239;border-radius:5px;padding:2px 8px;font-size:11px">💍 결혼기념일 ${escHtml(cx.weddingAnniv)}</span>` : '',
-          cx.referrer    ? `<span onclick="goToCust('${findCustByReferrerStr(cx.referrer).replace(/'/g,"\\'")}'" style="background:#f0fdf4;color:#166534;border-radius:5px;padding:2px 8px;font-size:11px;cursor:pointer;text-decoration:underline;text-underline-offset:2px">👤 추천인: ${escHtml(referrerDisplayName(cx.referrer))}${referrerPhone(cx.referrer)?` <span style="color:#888;font-size:10px">(${referrerPhone(cx.referrer)})</span>`:''} →</span>` : '',
+          cx.referrer    ? `<span onclick="goToCust('${findCustByReferrerStr(cx.referrer).replace(/'/g,"\\'")}')" style="background:#f0fdf4;color:#166534;border-radius:5px;padding:2px 8px;font-size:11px;cursor:pointer;text-decoration:underline;text-underline-offset:2px">👤 추천인: ${escHtml(referrerDisplayName(cx.referrer))}${referrerPhone(cx.referrer)?` <span style="color:#888;font-size:10px">(${referrerPhone(cx.referrer)})</span>`:''} →</span>` : '',
           (() => {
             const referred = Object.entries(custExtra).filter(([k,v])=> v.referrer && findCustByReferrerStr(v.referrer) === name).map(([k])=>k);
-            return referred.length ? `<span style="background:#f0fdf4;color:#166534;border-radius:5px;padding:2px 8px;font-size:11px">🌱 추천한 고객: ${referred.map(r=>`<span onclick="goToCust('${r.replace(/'/g,"\\'")}'"  style="cursor:pointer;text-decoration:underline;text-underline-offset:2px;font-weight:700">${escHtml(r)}</span>`).join(', ')}</span>` : '';
+            return referred.length ? `<span style="background:#f0fdf4;color:#166534;border-radius:5px;padding:2px 8px;font-size:11px">🌱 추천한 고객: ${referred.map(r=>`<span onclick="goToCust('${r.replace(/'/g,"\\'")}')"  style="cursor:pointer;text-decoration:underline;text-underline-offset:2px;font-weight:700">${escHtml(r)}</span>`).join(', ')}</span>` : '';
           })(),
         ].filter(Boolean).join('');
         return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:9px 12px;margin-bottom:10px">
