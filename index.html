@@ -1792,6 +1792,7 @@ let naverReservations = []; // 네이버 스마트플레이스 예약 (마스킹
 let _pendingNaverNo = ''; // 고객 등록으로 전환 중인 네이버 예약번호 (저장 성공 시 삭제)
 let _pendingNaverMemo = ''; // 네이버 원문(옵션·금액·요청) — 저장 시 예약 메모로
 let _lastWfId = null; // 직전에 그린 워크플로우 예약 id (같으면 편집 후 재렌더 → 스크롤 유지)
+let _lastCustName = null; // 직전에 그린 고객 상세 이름 (같으면 재렌더 → 스크롤 유지)
 window.__getBookings=function(){return bookings;};   // 감탄 콘솔 진행탭 연동용 (읽기)
 // 이전 체크리스트 툴과 호환: prodKey → product 필드 정규화
 bookings = bookings.map(b => {
@@ -7186,6 +7187,11 @@ function goToCust(name) {
 }
 
 async function showCustDetail(name) {
+  // ★ 같은 고객을 저장·갱신 후 다시 그리는 경우 스크롤 위치 유지 (다른 고객 열 땐 맨 위)
+  const _cdSame = (_lastCustName === name);
+  const _cdRightEl = document.getElementById('right');
+  const _cdScroll = (_cdSame && _cdRightEl) ? _cdRightEl.scrollTop : 0;
+  _lastCustName = name;
   const allBks = bookings.filter(b=>b.name===name).sort((a,bb)=>a.date.localeCompare(bb.date)||a.time.localeCompare(bb.time));
   if(!allBks.length) return;
   // SM메이트 방문기록 Supabase에서 불러오기 (지연 로딩)
@@ -7807,6 +7813,14 @@ async function showCustDetail(name) {
     const ta = document.getElementById('cust-memo-ta-main');
     if(ta) { ta.style.height='auto'; ta.style.height=ta.scrollHeight+'px'; }
   }, 0);
+  // ★ 저장·갱신 후 같은 고객 재렌더면 스크롤 복원 (여러 타이밍 — 지연 렌더/실시간 갱신 대비)
+  if (_cdScroll) {
+    const _cdRestore = () => { const r = document.getElementById('right'); if (r) r.scrollTop = _cdScroll; };
+    requestAnimationFrame(_cdRestore);
+    setTimeout(_cdRestore, 120);
+    setTimeout(_cdRestore, 450);
+    setTimeout(_cdRestore, 900);
+  }
 }
 
 // 히스토리 카드 접기/펼치기
