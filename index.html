@@ -906,6 +906,7 @@ let userRole = 'staff';
   <div class="modal">
     <h2 id="modal-title">예약 추가</h2>
     <input type="hidden" id="edit-id">
+    <div id="naver-origin-banner" style="display:none;background:#ecfdf5;border:1.5px solid #86efac;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12.5px;color:#065f46;line-height:1.6"></div>
     <div class="form-row" style="position:relative">
       <label>예약자 이름</label>
       <div style="display:flex;gap:6px">
@@ -1789,6 +1790,7 @@ function reserveBlock(b) {
 let bookings = [];
 let naverReservations = []; // 네이버 스마트플레이스 예약 (마스킹 이름, 캘린더 표시용)
 let _pendingNaverNo = ''; // 고객 등록으로 전환 중인 네이버 예약번호 (저장 성공 시 삭제)
+let _pendingNaverMemo = ''; // 네이버 원문(옵션·금액·요청) — 저장 시 예약 메모로
 window.__getBookings=function(){return bookings;};   // 감탄 콘솔 진행탭 연동용 (읽기)
 // 이전 체크리스트 툴과 호환: prodKey → product 필드 정규화
 bookings = bookings.map(b => {
@@ -5814,6 +5816,8 @@ function openEditModal(id) {
 function closeAddModal() {
   document.getElementById('add-modal').classList.remove('open');
   _pendingNaverNo = ''; // 저장 없이 닫으면 네이버 전환 취소 (오삭제 방지)
+  _pendingNaverMemo = '';
+  const _nb = document.getElementById('naver-origin-banner'); if(_nb){ _nb.style.display='none'; _nb.innerHTML=''; }
   document.getElementById('delete-confirm-row').style.display='none';
   const btn = document.getElementById('btn-delete-booking');
   btn.style.opacity='1';
@@ -5965,8 +5969,13 @@ function saveBooking() {
     addCustLog(name, `예약 등록 — ${pName}${yearTag} ${dateTag}`);
   }
   saveBookings();
-  // ★ 네이버 예약에서 전환한 거면, 등록 완료됐으니 그 네이버 예약 삭제
+  // ★ 네이버 전환이면: 원문을 예약 메모로 남기고, 원본 네이버 예약 삭제
   if (_pendingNaverNo) {
+    if (!editId && _pendingNaverMemo) {
+      const newB = bookings[bookings.length-1];
+      if (newB && !newB.memo) { newB.memo = _pendingNaverMemo; saveBookings(); }
+    }
+    _pendingNaverMemo = '';
     const _nno = _pendingNaverNo;
     _pendingNaverNo = '';
     naverReservations = naverReservations.filter(x => x.naver_booking_no !== _nno);
@@ -6159,6 +6168,19 @@ function openAddModalFromNaver(bookingNo) {
   const phe = document.getElementById('f-phone'); if (phe) phe.value = '';
   // 저장 성공 시 이 네이버 예약을 삭제하도록 기억
   _pendingNaverNo = bookingNo;
+  // ★ 네이버 원문(옵션·금액·요청)을 등록창 상단 배너에 표시 + 저장 시 예약 메모로 남김
+  const originLines = [];
+  if (r.product)      originLines.push('상품: ' + r.product);
+  if (r.option_menu)  originLines.push('옵션: ' + r.option_menu);
+  if (r.amount)       originLines.push('금액: ' + r.amount.toLocaleString('ko-KR') + '원');
+  if (r.request_note) originLines.push('요청: ' + r.request_note);
+  _pendingNaverMemo = originLines.join('\n');
+  const banner = document.getElementById('naver-origin-banner');
+  if (banner) {
+    banner.innerHTML = '<b>📋 네이버 예약 원문</b> <span style="color:#059669;font-weight:400">— 보고 인원·금액을 직접 넣으세요</span><br>' +
+      escHtml(_pendingNaverMemo).replace(/\n/g, '<br>');
+    banner.style.display = 'block';
+  }
   // 이름 칸에 포커스 + 전체선택(바로 실명으로 고쳐 쓰게)
   if (ne) { ne.focus(); ne.select(); }
 }
