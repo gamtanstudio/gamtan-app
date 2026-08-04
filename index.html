@@ -838,7 +838,7 @@ let userRole = 'staff';
     </div>
     <input type="text" id="gsearch-input" placeholder="이름, 전화번호, 날짜, 상품, 메모 등 무엇이든 검색..."
       style="width:100%;box-sizing:border-box;border:2px solid #6366f1;border-radius:10px;padding:10px 14px;font-size:14px;outline:none;margin-bottom:14px"
-      oninput="renderGSearch()">
+      oninput="debSearch(renderGSearch)">
     <div id="gsearch-result"></div>
   </div>
 </div>
@@ -2009,19 +2009,34 @@ async function onLoginSuccess(user) {
 let _realtimeChannel = null;
 let _rtReloadTimer = null;
 let _rtPhotoTimer = null;
+let _rtPendingReload = false;
+let _rtPendingPhotos = false;
+let _rtFocusoutBound = false;
+// 입력 중(활성 input/textarea)이면 리렌더를 미룸 — 커서 튐 방지
+function _isEditingNow() {
+  const ae = document.activeElement;
+  return !!(ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable));
+}
+async function _rtDoPhotos() {
+  await loadAllPhotosToCache();
+  const cn = localStorage.getItem('gamtan_cust_detail');
+  if (currentView === 'cust' && cn) { try { showCustDetail(cn); } catch(e){} }
+}
 function setupRealtimeSync() {
   if (_realtimeChannel || typeof supa === 'undefined' || !currentUser) return;
   const reload = () => {
     clearTimeout(_rtReloadTimer);
-    _rtReloadTimer = setTimeout(() => { loadFromSupabase(); }, 700); // 몰아치는 변경은 한 번에
+    _rtReloadTimer = setTimeout(() => {
+      if (_isEditingNow()) { _rtPendingReload = true; return; } // 입력 중 — 나중에
+      loadFromSupabase();
+    }, 700); // 몰아치는 변경은 한 번에
   };
   // 사진은 별도 처리 — 서버에서 사진만 다시 불러와 현재 열린 고객 카드 갱신
   const reloadPhotos = () => {
     clearTimeout(_rtPhotoTimer);
-    _rtPhotoTimer = setTimeout(async () => {
-      await loadAllPhotosToCache();
-      const cn = localStorage.getItem('gamtan_cust_detail');
-      if (currentView === 'cust' && cn) { try { showCustDetail(cn); } catch(e){} }
+    _rtPhotoTimer = setTimeout(() => {
+      if (_isEditingNow()) { _rtPendingPhotos = true; return; } // 입력 중 — 나중에
+      _rtDoPhotos();
     }, 700);
   };
   _realtimeChannel = supa.channel('gamtan-sync');
@@ -2031,6 +2046,17 @@ function setupRealtimeSync() {
     });
   _realtimeChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'cust_photos' }, reloadPhotos);
   _realtimeChannel.subscribe();
+  // 입력이 끝나면(포커스가 입력칸에서 빠지면) 미뤄둔 갱신을 반영
+  if (!_rtFocusoutBound) {
+    _rtFocusoutBound = true;
+    document.addEventListener('focusout', () => {
+      setTimeout(() => {
+        if (_isEditingNow()) return; // 아직 다른 칸 입력 중이면 계속 대기
+        if (_rtPendingReload) { _rtPendingReload = false; loadFromSupabase(); }
+        if (_rtPendingPhotos) { _rtPendingPhotos = false; _rtDoPhotos(); }
+      }, 350);
+    });
+  }
 }
 
 function applyRoleUI() {
@@ -8122,15 +8148,18 @@ function openGSearch() {
 function closeGSearch() {
   document.getElementById('gsearch-modal').classList.remove('open');
 }
+let _searchDebTimer = null;
+function debSearch(fn){ clearTimeout(_searchDebTimer); _searchDebTimer = setTimeout(fn, 220); }
 function renderGSearch() {
   const q = (document.getElementById('gsearch-input')?.value||'').trim().toLowerCase();
   const el = document.getElementById('gsearch-result');
   if(!el) return;
-  if(!q) { el.innerHTML='<div style="text-align:center;color:#bbb;padding:20px">이름, 전화번호, 날짜(2025-04), 상품명, 메모 등 입력하세요</div>'; return; }
+  if(!q) { el.innerHTML='<div style="text-align:center;color:#bbb;padding:20px">이름, 전화번호, 날짜(2025-04), 상품명, 메모, 상태(미입금 등) 입력하세요</div>'; return; }
   const results = bookings.filter(b=>{
     const p = PRODUCTS[b.product]||PRODUCTS.story;
-    // 기본 예약 필드
-    const basicMatch = [b.name,b.phone,b.email,b.date,b.familyNames,b.memo,b.childName,p.name,b.postponedDate]
+    // 기본 예약 필드 + 상태 라벨(미입금·완료·모니터·연기 등)
+    const statusLabel = (getDynamicStatusLabel(b)||{}).label || '';
+    const basicMatch = [b.name,b.phone,b.email,b.date,b.familyNames,b.memo,b.childName,p.name,b.postponedDate,statusLabel]
       .filter(Boolean).some(v=>v.toLowerCase().includes(q));
     if(basicMatch) return true;
     // 전화번호 뒷자리 숫자 검색
@@ -8859,7 +8888,7 @@ function importData(e) {
     <div style="display:flex;align-items:center;gap:10px;padding:16px 18px;border-bottom:1px solid #eee;flex-shrink:0">
       <span style="font-size:18px">👤</span>
       <input id="cust-popup-input" type="text" placeholder="고객 이름 · 전화번호"
-        oninput="if(!_custPopupComposing) renderCustSearchPopup()"
+        oninput="if(!_custPopupComposing) debSearch(renderCustSearchPopup)"
         oncompositionstart="_custPopupComposing=true"
         oncompositionend="_custPopupComposing=false; renderCustSearchPopup()"
         onkeydown="if(event.key==='Enter'){event.preventDefault();event.stopPropagation()}"
