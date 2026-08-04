@@ -1787,6 +1787,7 @@ function reserveBlock(b) {
 }
 // ====================== STORAGE ======================
 let bookings = [];
+let naverReservations = []; // 네이버 스마트플레이스 예약 (마스킹 이름, 캘린더 표시용)
 window.__getBookings=function(){return bookings;};   // 감탄 콘솔 진행탭 연동용 (읽기)
 // 이전 체크리스트 툴과 호환: prodKey → product 필드 정규화
 bookings = bookings.map(b => {
@@ -2040,7 +2041,7 @@ function setupRealtimeSync() {
     }, 700);
   };
   _realtimeChannel = supa.channel('gamtan-sync');
-  ['manual_bookings','cust_memos','cust_logs','cust_extra','cust_profiles','date_memos','booking_state','cust_numbers','schedules']
+  ['manual_bookings','cust_memos','cust_logs','cust_extra','cust_profiles','date_memos','booking_state','cust_numbers','schedules','reservations']
     .forEach(tbl => {
       _realtimeChannel.on('postgres_changes', { event: '*', schema: 'public', table: tbl }, reload);
     });
@@ -2438,6 +2439,13 @@ async function loadFromSupabase() {
       nextCustNo = Math.max(20000, maxNo + 1);
       try { localStorage.setItem('gamtan_cust_numbers', JSON.stringify(custNumbers)); localStorage.setItem('gamtan_next_cust_no', String(nextCustNo)); } catch(e) {}
     } catch(e) { /* cust_numbers 테이블 미생성 — 무시 */ }
+
+    // ★ 네이버 스마트플레이스 예약 불러오기 (캘린더 표시용)
+    try {
+      const rvRows = await fetchAll((from, to) =>
+        supa.from('reservations').select('naver_booking_no,customer_name,product,use_at,event_type,payment_status,option_menu,amount,request_note').range(from, to));
+      naverReservations = (rvRows||[]).filter(r => r.use_at);
+    } catch(e) { naverReservations = []; /* reservations 테이블 미생성 — 무시 */ }
 
     const modalOpen = document.getElementById('add-modal')?.classList.contains('open')
       || document.getElementById('wf-modal')?.classList.contains('open');
@@ -6082,6 +6090,32 @@ function deleteBookingDirect(id) {
 
 // ====================== 월간 캘린더 ======================
 
+// 네이버 예약 상품 → 색 (감탄삼촌=가족 그린 / 증명=파랑 / 그 외 그린 기본)
+function naverColor(product) {
+  const p = product || '';
+  if (p.includes('증명')) return '#2563eb';           // 파랑
+  return '#16a34a';                                    // 감탄삼촌·가족 등 그린
+}
+// 네이버 예약 클릭 → 상세 정보 (마스킹이라 고객카드 자동연결 안 됨)
+function showNaverResv(bookingNo) {
+  const r = naverReservations.find(x => x.naver_booking_no === bookingNo);
+  if (!r) return;
+  const dt = r.use_at ? new Date(r.use_at) : null;
+  const when = dt && !isNaN(dt.getTime()) ? dt.toLocaleString('ko-KR') : (r.use_at||'-');
+  alert(
+    '[네이버 예약]\n\n' +
+    '예약자: ' + (r.customer_name||'-') + '\n' +
+    '상품: ' + (r.product||'-') + '\n' +
+    '일시: ' + when + '\n' +
+    '결제: ' + (r.payment_status||'-') +
+    (r.option_menu ? '\n메뉴: ' + r.option_menu : '') +
+    (r.amount ? '\n금액: ' + r.amount.toLocaleString('ko-KR') + '원' : '') +
+    (r.request_note ? '\n요청: ' + r.request_note : '') + '\n' +
+    (r.event_type ? '\n상태: ' + r.event_type : '') + '\n' +
+    '예약번호: ' + r.naver_booking_no + '\n\n' +
+    '※ 네이버 예약은 이름이 가려져 있어 고객카드와 자동연결되지 않습니다. 상담·입금 확인이 필요합니다.'
+  );
+}
 function renderMonthCal() {
   const mc = document.getElementById('month-cal');
   if(!mc) return;
@@ -6100,6 +6134,17 @@ function renderMonthCal() {
       if(!byDate[b.postponedDate]) byDate[b.postponedDate] = [];
       byDate[b.postponedDate].push({...b, _mcType: 'postponed_new'});
     }
+  });
+
+  // ★ 네이버 예약을 같은 날짜 버킷에 병합 (use_at → 한국 로컬 날짜/시간)
+  naverReservations.forEach(r => {
+    if(!r.use_at) return;
+    const dt = new Date(r.use_at);
+    if(isNaN(dt.getTime())) return;
+    const ds = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+    const tm = `${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+    if(!byDate[ds]) byDate[ds] = [];
+    byDate[ds].push({ _naver:true, name:r.customer_name||'예약', product:r.product||'', time:tm, event_type:r.event_type, booking_no:r.naver_booking_no, _mcType: r.event_type==='취소'?'cancelled':'normal' });
   });
 
   // 그리드 셀 생성 (일요일 시작)
@@ -6156,6 +6201,17 @@ function renderMonthCal() {
     const MC_PROD = {story:'스토리',simpfam:'심플패밀리',bigfam:'대가족',growth:'성장',kids:'키즈',profile:'프로필',jangsu:'장수',id:'증명'};
 
     const entriesHtml = bks.map(b => {
+      // ★ 네이버 예약 — 색은 상품 규칙(감탄삼촌=그린/증명=파랑), 취소는 회색, N 뱃지
+      if(b._naver) {
+        const nc = naverColor(b.product);
+        const isCancel = b._mcType === 'cancelled';
+        return `<div class="mc-entry" style="border-left-color:${isCancel?'#9ca3af':nc};opacity:${isCancel?0.55:1}" onclick="event.stopPropagation();showNaverResv('${b.booking_no}')">
+          <span class="mc-entry-time" style="color:${isCancel?'#9ca3af':nc}">${fmtTime(b.time)}</span>
+          <span class="mc-entry-name" style="color:${isCancel?'#9ca3af':'#1a1a2e'};${isCancel?'text-decoration:line-through;':''}">${escHtml(b.name)}</span>
+          <span style="font-size:8px;background:${isCancel?'#9ca3af':nc};color:#fff;border-radius:2px;padding:0 3px;flex-shrink:0;font-weight:800" title="네이버 예약">N</span>
+          ${isCancel?'<span style="font-size:9px;background:#9ca3af;color:#fff;border-radius:2px;padding:0 3px;flex-shrink:0">취소</span>':''}
+        </div>`;
+      }
       const p = PRODUCTS[b.product] || PRODUCTS.story;
       const mcType = b._mcType || 'normal';
       const isCancelledMc = mcType === 'cancelled';
