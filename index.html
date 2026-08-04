@@ -2021,10 +2021,26 @@ function _isEditingNow() {
   const ae = document.activeElement;
   return !!(ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable));
 }
+// ★ 실시간 갱신으로 화면 다시 그릴 때 스크롤 위치 유지 (기록 중 화면이 위로 툭 튀는 것 방지)
+function _reloadKeepScroll() {
+  const right = document.getElementById('right');
+  const gcBody = document.getElementById('gc-body');
+  const st = right ? right.scrollTop : 0;
+  const gcSt = gcBody ? gcBody.scrollTop : 0;
+  Promise.resolve(loadFromSupabase()).then(() => {
+    requestAnimationFrame(() => {
+      const r2 = document.getElementById('right'); if (r2 && st) r2.scrollTop = st;
+      const g2 = document.getElementById('gc-body'); if (g2 && gcSt) g2.scrollTop = gcSt;
+    });
+  });
+}
 async function _rtDoPhotos() {
+  const right = document.getElementById('right');
+  const st = right ? right.scrollTop : 0;
   await loadAllPhotosToCache();
   const cn = localStorage.getItem('gamtan_cust_detail');
   if (currentView === 'cust' && cn) { try { showCustDetail(cn); } catch(e){} }
+  requestAnimationFrame(() => { const r2 = document.getElementById('right'); if (r2 && st) r2.scrollTop = st; });
 }
 function setupRealtimeSync() {
   if (_realtimeChannel || typeof supa === 'undefined' || !currentUser) return;
@@ -2032,7 +2048,7 @@ function setupRealtimeSync() {
     clearTimeout(_rtReloadTimer);
     _rtReloadTimer = setTimeout(() => {
       if (_isEditingNow()) { _rtPendingReload = true; return; } // 입력 중 — 나중에
-      loadFromSupabase();
+      _reloadKeepScroll();
     }, 700); // 몰아치는 변경은 한 번에
   };
   // 사진은 별도 처리 — 서버에서 사진만 다시 불러와 현재 열린 고객 카드 갱신
@@ -2056,7 +2072,7 @@ function setupRealtimeSync() {
     document.addEventListener('focusout', () => {
       setTimeout(() => {
         if (_isEditingNow()) return; // 아직 다른 칸 입력 중이면 계속 대기
-        if (_rtPendingReload) { _rtPendingReload = false; loadFromSupabase(); }
+        if (_rtPendingReload) { _rtPendingReload = false; _reloadKeepScroll(); }
         if (_rtPendingPhotos) { _rtPendingPhotos = false; _rtDoPhotos(); }
       }, 350);
     });
