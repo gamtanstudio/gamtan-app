@@ -2026,12 +2026,15 @@ function _isEditingNow() {
 function _reloadKeepScroll() {
   const right = document.getElementById('right');
   const gcBody = document.getElementById('gc-body');
+  const wfModal = document.querySelector('#wf-modal .modal');
   const st = right ? right.scrollTop : 0;
   const gcSt = gcBody ? gcBody.scrollTop : 0;
+  const wfSt = wfModal ? wfModal.scrollTop : 0;
   Promise.resolve(loadFromSupabase()).then(() => {
     requestAnimationFrame(() => {
       const r2 = document.getElementById('right'); if (r2 && st) r2.scrollTop = st;
       const g2 = document.getElementById('gc-body'); if (g2 && gcSt) g2.scrollTop = gcSt;
+      const w2 = document.querySelector('#wf-modal .modal'); if (w2 && wfSt) w2.scrollTop = wfSt;
     });
   });
 }
@@ -5156,7 +5159,7 @@ function clearWorkflow() {
 function renderWorkflow(b) {
   // ★ 같은 예약을 편집 후 다시 그리는 경우 스크롤 위치 유지 (새 예약 열 땐 맨 위)
   const _wfRight = document.getElementById('right');
-  const _wfModalBody = document.getElementById('wf-modal-body');
+  const _wfModalBody = document.querySelector('#wf-modal .modal');
   const _wfSame = (_lastWfId === b.id);
   const _wfScrollR = (_wfSame && _wfRight) ? _wfRight.scrollTop : 0;
   const _wfScrollM = (_wfSame && _wfModalBody) ? _wfModalBody.scrollTop : 0;
@@ -5265,7 +5268,7 @@ function renderWorkflow(b) {
   // ★ 편집 후 재렌더면 보던 스크롤 위치로 복원 (PC=#right, 폰=wf-modal-body)
   requestAnimationFrame(() => {
     const r2 = document.getElementById('right'); if (r2 && _wfScrollR) r2.scrollTop = _wfScrollR;
-    const m2 = document.getElementById('wf-modal-body'); if (m2 && _wfScrollM) m2.scrollTop = _wfScrollM;
+    const m2 = document.querySelector('#wf-modal .modal'); if (m2 && _wfScrollM) m2.scrollTop = _wfScrollM;
   });
 }
 
