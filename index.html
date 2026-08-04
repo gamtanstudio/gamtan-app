@@ -1791,6 +1791,7 @@ let bookings = [];
 let naverReservations = []; // 네이버 스마트플레이스 예약 (마스킹 이름, 캘린더 표시용)
 let _pendingNaverNo = ''; // 고객 등록으로 전환 중인 네이버 예약번호 (저장 성공 시 삭제)
 let _pendingNaverMemo = ''; // 네이버 원문(옵션·금액·요청) — 저장 시 예약 메모로
+let _lastWfId = null; // 직전에 그린 워크플로우 예약 id (같으면 편집 후 재렌더 → 스크롤 유지)
 window.__getBookings=function(){return bookings;};   // 감탄 콘솔 진행탭 연동용 (읽기)
 // 이전 체크리스트 툴과 호환: prodKey → product 필드 정규화
 bookings = bookings.map(b => {
@@ -5153,6 +5154,13 @@ function clearWorkflow() {
 }
 
 function renderWorkflow(b) {
+  // ★ 같은 예약을 편집 후 다시 그리는 경우 스크롤 위치 유지 (새 예약 열 땐 맨 위)
+  const _wfRight = document.getElementById('right');
+  const _wfModalBody = document.getElementById('wf-modal-body');
+  const _wfSame = (_lastWfId === b.id);
+  const _wfScrollR = (_wfSame && _wfRight) ? _wfRight.scrollTop : 0;
+  const _wfScrollM = (_wfSame && _wfModalBody) ? _wfModalBody.scrollTop : 0;
+  _lastWfId = b.id;
   if(!b.product || !PRODUCTS[b.product]) b.product = 'story';
   document.getElementById('empty-state').style.display='none';
   const wf = document.getElementById('workflow');
@@ -5254,6 +5262,11 @@ function renderWorkflow(b) {
       document.getElementById('empty-state').style.display = 'flex';
     }
   }
+  // ★ 편집 후 재렌더면 보던 스크롤 위치로 복원 (PC=#right, 폰=wf-modal-body)
+  requestAnimationFrame(() => {
+    const r2 = document.getElementById('right'); if (r2 && _wfScrollR) r2.scrollTop = _wfScrollR;
+    const m2 = document.getElementById('wf-modal-body'); if (m2 && _wfScrollM) m2.scrollTop = _wfScrollM;
+  });
 }
 
 function buildIdStageBody(b, stageIdx, isDone, isCurrent) {
