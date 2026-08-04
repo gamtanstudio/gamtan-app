@@ -3376,7 +3376,7 @@ function buildPriceBox(b) {
       <span id="pt-paid-sum-${b.id}" style="display:none">${fmtPrice(Number(dep.amt)+midSum)}</span>
       <span id="pt-remain-${b.id}" style="display:none">${fmtPrice(Math.max(0,remain))}</span>
       <!-- 결제금액 + 추가납입 한줄 입력 -->
-      <div style="display:flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #e0e0e0;border-radius:10px;padding:8px 12px;margin-bottom:4px">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;background:#fff;border:1.5px solid #e0e0e0;border-radius:10px;padding:8px 12px;margin-bottom:4px">
         <span style="font-size:11px;font-weight:700;color:#7c3aed;white-space:nowrap">결제금액</span>
         <input type="text" value="${Number(dep.amt).toLocaleString('ko-KR')}" oninput="editDepositAmt('${b.id}',this.value)"
           style="width:90px;border:1px solid #c4b5fd;border-radius:6px;padding:5px 8px;font-size:13px;text-align:right;font-family:inherit">
@@ -3515,7 +3515,7 @@ function buildPriceBox(b) {
     <span id="pt-paid-sum-${b.id}" style="display:none">${fmtPrice(Number(dep.amt)+midSum)}</span>
     <span id="pt-remain-${b.id}" style="display:none">${fmtPrice(Math.max(0,remain))}</span>
     <!-- 예약금 + 추가납입 한줄 입력 -->
-    <div style="display:flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #e0e0e0;border-radius:10px;padding:8px 12px;margin-bottom:4px">
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;background:#fff;border:1.5px solid #e0e0e0;border-radius:10px;padding:8px 12px;margin-bottom:4px">
       <span style="font-size:11px;font-weight:700;color:#7c3aed;white-space:nowrap">예약금</span>
       <input id="pt-dep-input-${b.id}" type="text" value="${Number(dep.amt).toLocaleString('ko-KR')}" oninput="editDepositAmt('${b.id}',this.value)"
         style="width:90px;border:1px solid #c4b5fd;border-radius:6px;padding:5px 8px;font-size:13px;text-align:right;font-family:inherit">
