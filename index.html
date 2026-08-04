@@ -2020,7 +2020,19 @@ let _rtFocusoutBound = false;
 // 입력 중(활성 input/textarea)이면 리렌더를 미룸 — 커서 튐 방지
 function _isEditingNow() {
   const ae = document.activeElement;
-  return !!(ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable));
+  if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return true;
+  // 진행관리·예약등록 모달이 열려 있으면 실시간 갱신 보류 (작업 중 화면이 위로 튀는 것 방지)
+  if (document.getElementById('wf-modal')?.classList.contains('open')) return true;
+  if (document.getElementById('add-modal')?.classList.contains('open')) return true;
+  return false;
+}
+// 모달 닫힘 등으로 작업이 끝나면, 보류해뒀던 실시간 갱신을 반영
+function _flushPendingReload() {
+  setTimeout(() => {
+    if (_isEditingNow()) return;
+    if (_rtPendingReload) { _rtPendingReload = false; _reloadKeepScroll(); }
+    if (_rtPendingPhotos) { _rtPendingPhotos = false; _rtDoPhotos(); }
+  }, 150);
 }
 // ★ 실시간 갱신으로 화면 다시 그릴 때 스크롤 위치 유지 (기록 중 화면이 위로 툭 튀는 것 방지)
 function _reloadKeepScroll() {
@@ -5847,6 +5859,7 @@ function openEditModal(id) {
 
 function closeAddModal() {
   document.getElementById('add-modal').classList.remove('open');
+  if (typeof _flushPendingReload === 'function') _flushPendingReload();
   _pendingNaverNo = ''; // 저장 없이 닫으면 네이버 전환 취소 (오삭제 방지)
   _pendingNaverMemo = '';
   const _nb = document.getElementById('naver-origin-banner'); if(_nb){ _nb.style.display='none'; _nb.innerHTML=''; }
@@ -7146,6 +7159,7 @@ function openWfModal(b) {
 function closeWfModal() {
   const modal = document.getElementById('wf-modal');
   modal.classList.remove('open');
+  if (typeof _flushPendingReload === 'function') _flushPendingReload();
   // wf-modal 닫을 때 wf-modal-body의 내용을 다시 #workflow로 복원
   const wfBody = document.getElementById('wf-modal-body');
   const wfEl = document.getElementById('workflow');
