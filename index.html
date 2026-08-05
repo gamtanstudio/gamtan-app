@@ -388,10 +388,10 @@ body{font-family:'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif
 .mc-dnum{font-size:15px;font-weight:900;color:#222;display:flex;align-items:center;gap:3px;margin-bottom:3px;line-height:1}
 .mc-today-dot{width:20px;height:20px;background:#6366f1;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#fff;flex-shrink:0}
 .mc-memo-box{position:relative}
-.mc-memo-colors{display:none;gap:5px;padding:2px 1px 4px;align-items:center}
+.mc-memo-colors{display:none;gap:9px;padding:3px 2px 5px;align-items:center}
 .mc-memo-box:focus-within .mc-memo-colors{display:flex}
-.mc-memo-colors span{width:15px;height:15px;border-radius:50%;cursor:pointer;border:1.5px solid #fff;box-shadow:0 0 0 1px #ccc}
-.mc-memo-colors span:active{transform:scale(.9)}
+.mc-memo-colors span{width:20px;height:20px;border-radius:50%;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #bbb}
+.mc-memo-colors span:active{transform:scale(.88)}
 .mc-memo-ta{width:100%;border:none;background:#e8e8e8;font-size:14px;color:#111;resize:none;padding:5px 7px;font-family:inherit;line-height:1.55;overflow:hidden;min-height:26px;border-radius:5px;transition:background .15s;box-sizing:border-box;flex-shrink:0;display:block}
 .mc-memo-ta:focus{background:#ddd;outline:none}
 .mc-memo-ta.has-memo{background:#e8e8e8}
@@ -6313,10 +6313,10 @@ function renderMonthCal() {
     const memoHtml = showMemo
       ? `<div class="mc-memo-box">
           <div class="mc-memo-colors">
-            <span onclick="event.stopPropagation();setMemoColor('${cell.ds}','k')" style="background:#111" title="검정"></span>
-            <span onclick="event.stopPropagation();setMemoColor('${cell.ds}','b')" style="background:#2563eb" title="파랑"></span>
-            <span onclick="event.stopPropagation();setMemoColor('${cell.ds}','r')" style="background:#dc2626" title="빨강"></span>
-            <span onclick="event.stopPropagation();setMemoColor('${cell.ds}','p')" style="background:#7c3aed" title="보라"></span>
+            <span onpointerdown="event.preventDefault();event.stopPropagation();setMemoColor('${cell.ds}','k')" style="background:#111" title="검정"></span>
+            <span onpointerdown="event.preventDefault();event.stopPropagation();setMemoColor('${cell.ds}','b')" style="background:#2563eb" title="파랑"></span>
+            <span onpointerdown="event.preventDefault();event.stopPropagation();setMemoColor('${cell.ds}','r')" style="background:#dc2626" title="빨강"></span>
+            <span onpointerdown="event.preventDefault();event.stopPropagation();setMemoColor('${cell.ds}','p')" style="background:#7c3aed" title="보라"></span>
           </div>
           <textarea class="mc-memo-ta${memo?' has-memo':''}" rows="2" data-ds="${cell.ds}"
             placeholder="메모..."
