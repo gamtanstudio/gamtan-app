@@ -307,7 +307,7 @@ body{font-family:'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif
   .mc-entry-name{font-size:9px}
   .mc-entry-prod{display:none}
   .mc-add-btn{display:none}
-  .mc-memo-ta{font-size:11px;min-height:28px}
+  .mc-memo-ta{font-size:13px;min-height:28px}
   /* 사진 섹션 */
   .photo-thumb{width:72px;height:72px}
   .photo-add-cell{width:72px;height:72px}
@@ -387,10 +387,15 @@ body{font-family:'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif
 .mc-cell.mc-sun .mc-dnum{color:#dc2626}
 .mc-dnum{font-size:15px;font-weight:900;color:#222;display:flex;align-items:center;gap:3px;margin-bottom:3px;line-height:1}
 .mc-today-dot{width:20px;height:20px;background:#6366f1;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#fff;flex-shrink:0}
-.mc-memo-ta{width:100%;border:none;background:#e8e8e8;font-size:12px;color:#111;resize:none;padding:5px 7px;font-family:inherit;line-height:1.55;overflow:hidden;min-height:26px;border-radius:5px;transition:background .15s;box-sizing:border-box;flex-shrink:0;display:block}
-.mc-memo-ta:focus{background:#ddd;outline:none;color:#000}
-.mc-memo-ta.has-memo{background:#e8e8e8;color:#111}
-.mc-memo-ta::placeholder{color:#bbb;font-size:12px}
+.mc-memo-box{position:relative}
+.mc-memo-colors{display:none;gap:5px;padding:2px 1px 4px;align-items:center}
+.mc-memo-box:focus-within .mc-memo-colors{display:flex}
+.mc-memo-colors span{width:15px;height:15px;border-radius:50%;cursor:pointer;border:1.5px solid #fff;box-shadow:0 0 0 1px #ccc}
+.mc-memo-colors span:active{transform:scale(.9)}
+.mc-memo-ta{width:100%;border:none;background:#e8e8e8;font-size:14px;color:#111;resize:none;padding:5px 7px;font-family:inherit;line-height:1.55;overflow:hidden;min-height:26px;border-radius:5px;transition:background .15s;box-sizing:border-box;flex-shrink:0;display:block}
+.mc-memo-ta:focus{background:#ddd;outline:none}
+.mc-memo-ta.has-memo{background:#e8e8e8}
+.mc-memo-ta::placeholder{color:#bbb;font-size:13px}
 .mc-entry{display:flex;flex-direction:row;align-items:flex-start;padding:1px 3px;border-radius:2px;cursor:pointer;margin-bottom:1px;transition:background .1s;flex-shrink:0;gap:2px;overflow:hidden;border-left:3px solid transparent;min-width:0;flex-wrap:wrap}
 .mc-entry:hover{background:#f0f0f0}
 .mc-entry-time{font-size:12px;font-weight:500;white-space:nowrap;flex-shrink:0;min-width:30px}
@@ -6297,19 +6302,31 @@ function renderMonthCal() {
     const dow = idx % 7; // 0=일 6=토
     const isToday = cell.ds === today;
     const bks = (byDate[cell.ds]||[]).sort((a,b)=>a.time.localeCompare(b.time));
-    const memo = dateMemos[cell.ds] || '';
+    const memoRaw = dateMemos[cell.ds] || '';
+    const _pm = parseMemo(memoRaw);
+    const memo = _pm.text; // 순수 텍스트 (has-memo·data-saved 판정용)
+    const memoCol = MEMO_COLORS[_pm.color] || '#111';
 
     // 인라인 메모 textarea — 모바일(600px 이하)에서는 메모 내용 있을 때만 렌더링
     const isMob = window.innerWidth <= 600;
     const showMemo = cell.thisMonth && (!isMob || memo.trim());
     const memoHtml = showMemo
-      ? `<textarea class="mc-memo-ta${memo?' has-memo':''}" rows="2"
-          placeholder="메모..."
-          onchange="mcSaveMemo('${cell.ds}',this.value)"
-          oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px';if(this.value.trim()!==this.dataset.saved)this.classList.add('has-memo');else this.classList.toggle('has-memo',!!this.value.trim())"
-          data-saved="${escHtml(memo)}"
-          onclick="event.stopPropagation()"
-        >${escHtml(memo)}</textarea>`
+      ? `<div class="mc-memo-box">
+          <div class="mc-memo-colors">
+            <span onclick="event.stopPropagation();setMemoColor('${cell.ds}','k')" style="background:#111" title="검정"></span>
+            <span onclick="event.stopPropagation();setMemoColor('${cell.ds}','b')" style="background:#2563eb" title="파랑"></span>
+            <span onclick="event.stopPropagation();setMemoColor('${cell.ds}','r')" style="background:#dc2626" title="빨강"></span>
+            <span onclick="event.stopPropagation();setMemoColor('${cell.ds}','p')" style="background:#7c3aed" title="보라"></span>
+          </div>
+          <textarea class="mc-memo-ta${memo?' has-memo':''}" rows="2" data-ds="${cell.ds}"
+            placeholder="메모..."
+            style="color:${memoCol};font-weight:${_pm.color==='k'?'400':'600'}"
+            onchange="mcSaveMemo('${cell.ds}',this.value)"
+            oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px';if(this.value.trim()!==this.dataset.saved)this.classList.add('has-memo');else this.classList.toggle('has-memo',!!this.value.trim())"
+            data-saved="${escHtml(memo)}"
+            onclick="event.stopPropagation()"
+          >${escHtml(memo)}</textarea>
+        </div>`
       : '';
 
     const MC_PROD = {story:'스토리',simpfam:'심플패밀리',bigfam:'대가족',growth:'성장',kids:'키즈',profile:'프로필',jangsu:'장수',id:'증명'};
@@ -6580,10 +6597,17 @@ function openAddModalForDate(ds) {
 }
 
 // 월간 인라인 메모 저장
+const MEMO_COLORS = { k:'#111', b:'#2563eb', r:'#dc2626', p:'#7c3aed' };
+// 메모는 "§색§텍스트" 형태로 저장 (색 없으면 검정). 표시할 땐 텍스트만
+function parseMemo(raw){
+  const m = (raw||'').match(/^§([kbrp])§([\s\S]*)$/);
+  return m ? { color:m[1], text:m[2] } : { color:'k', text:(raw||'') };
+}
 async function mcSaveMemo(ds, val) {
   const v = val.trim();
   if(v) {
-    dateMemos[ds] = v;
+    const cur = parseMemo(dateMemos[ds] || '');
+    dateMemos[ds] = '§' + cur.color + '§' + v; // 기존 색 유지하며 텍스트 갱신
   } else {
     delete dateMemos[ds];
   }
@@ -6591,11 +6615,24 @@ async function mcSaveMemo(ds, val) {
   // ★ Supabase 저장 — 모든 기기 공유. 테이블 없으면 조용히 스킵
   try {
     if(v) {
-      await supa.from('date_memos').upsert({ ds, memo: v, updated_at: new Date().toISOString() }, { onConflict: 'ds' });
+      await supa.from('date_memos').upsert({ ds, memo: dateMemos[ds], updated_at: new Date().toISOString() }, { onConflict: 'ds' });
     } else {
       await supa.from('date_memos').delete().eq('ds', ds);
     }
   } catch(e) { console.error('날짜메모 동기화 실패:', e); }
+}
+// 메모 색 선택 (검정 k / 파랑 b / 빨강 r / 보라 p)
+async function setMemoColor(ds, c) {
+  const cur = parseMemo(dateMemos[ds] || '');
+  if(!cur.text.trim()) return; // 텍스트 없으면 색 지정 무의미
+  dateMemos[ds] = '§' + c + '§' + cur.text;
+  saveDateMemos();
+  try { await supa.from('date_memos').upsert({ ds, memo: dateMemos[ds], updated_at: new Date().toISOString() }, { onConflict: 'ds' }); }
+  catch(e) { console.error('메모 색 저장 실패:', e); }
+  // 해당 메모칸 색만 즉시 반영 (포커스·팔레트 유지 위해 전체 리렌더 안 함)
+  const col = MEMO_COLORS[c] || '#111';
+  const ta = document.querySelector('textarea.mc-memo-ta[data-ds="'+ds+'"]');
+  if(ta){ ta.style.color = col; ta.style.fontWeight = (c==='k'?'400':'600'); }
 }
 
 // 월간에서 메모 클릭 → 해당 날짜 주간 뷰로 이동 (fallback)
@@ -9117,7 +9154,7 @@ function openDayDetail(ds) {
     return false;
   }).sort((a,b) => (a.time||'').localeCompare(b.time||''));
 
-  const memo = dateMemos[ds] || '';
+  const memo = parseMemo(dateMemos[ds] || '').text;
   const [y,m,d] = ds.split('-').map(Number);
   const dow = ['일','월','화','수','목','금','토'][new Date(y,m-1,d).getDay()];
   const isToday = ds === new Date().toISOString().slice(0,10);
