@@ -915,7 +915,7 @@ let userRole = 'staff';
     <div class="form-row" style="position:relative">
       <label>예약자 이름</label>
       <div style="display:flex;gap:6px">
-        <input type="text" id="f-name" placeholder="" autocomplete="off" style="flex:1" oninput="filterCustomerDrop(this.value)" onfocus="showCustomerDrop()" onblur="setTimeout(hideCustomerDrop,200)">
+        <input type="text" id="f-name" lang="ko" placeholder="" autocomplete="off" style="flex:1" oninput="filterCustomerDrop(this.value)" onfocus="showCustomerDrop()" onblur="setTimeout(hideCustomerDrop,200)">
         <button type="button" style="border:1px solid #ddd;background:#f8f9fa;border-radius:8px;padding:0 10px;font-size:13px;cursor:pointer;color:#666" onclick="toggleCustomerDrop()" title="단골 고객 목록">👤</button>
       </div>
       <div id="customer-drop" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:100;max-height:180px;overflow-y:auto;margin-top:2px">
@@ -935,7 +935,7 @@ let userRole = 'staff';
     </div>
     <div class="form-row">
       <label>가족 이름 <span style="font-size:11px;color:#aaa;font-weight:400">(아이·남편·가족 이름)</span></label>
-      <input type="text" id="f-familynames" placeholder="" autocomplete="off">
+      <input type="text" id="f-familynames" lang="ko" placeholder="" autocomplete="off">
     </div>
     <div class="form-row">
       <label>상품</label>
@@ -1059,7 +1059,7 @@ let userRole = 'staff';
     </div>
     <div class="form-row" id="child-name-row" style="display:none">
       <label>아이 이름</label>
-      <input type="text" id="f-childname" placeholder="">
+      <input type="text" id="f-childname" lang="ko" placeholder="">
     </div>
     <div class="form-row-2">
       <div class="form-row">
@@ -2034,6 +2034,8 @@ let _rtPhotoTimer = null;
 let _rtPendingReload = false;
 let _rtPendingPhotos = false;
 let _rtFocusoutBound = false;
+let _selfWriteUntil = 0;      // 내가 방금 저장한 직후엔 실시간 리렌더 보류 — 내 저장 메아리로 화면 튐 방지
+let _flushRetryTimer = null;
 // 입력 중(활성 input/textarea)이면 리렌더를 미룸 — 커서 튐 방지
 function _isEditingNow() {
   const ae = document.activeElement;
@@ -2044,12 +2046,18 @@ function _isEditingNow() {
   return false;
 }
 // 모달 닫힘 등으로 작업이 끝나면, 보류해뒀던 실시간 갱신을 반영
+function _maybeFlushReload() {
+  // 아직 입력 중이거나 방금 내가 저장한 직후면 잠깐 뒤 다시 시도 (내 저장 메아리로 화면 튐 방지)
+  if (_isEditingNow() || Date.now() < _selfWriteUntil) {
+    clearTimeout(_flushRetryTimer);
+    _flushRetryTimer = setTimeout(_maybeFlushReload, 500);
+    return;
+  }
+  if (_rtPendingReload) { _rtPendingReload = false; _reloadKeepScroll(); }
+  if (_rtPendingPhotos) { _rtPendingPhotos = false; _rtDoPhotos(); }
+}
 function _flushPendingReload() {
-  setTimeout(() => {
-    if (_isEditingNow()) return;
-    if (_rtPendingReload) { _rtPendingReload = false; _reloadKeepScroll(); }
-    if (_rtPendingPhotos) { _rtPendingPhotos = false; _rtDoPhotos(); }
-  }, 150);
+  setTimeout(_maybeFlushReload, 150);
 }
 // ★ 실시간 갱신으로 화면 다시 그릴 때 스크롤 위치 유지 (기록 중 화면이 위로 툭 튀는 것 방지)
 function _reloadKeepScroll() {
@@ -2080,7 +2088,7 @@ function setupRealtimeSync() {
   const reload = () => {
     clearTimeout(_rtReloadTimer);
     _rtReloadTimer = setTimeout(() => {
-      if (_isEditingNow()) { _rtPendingReload = true; return; } // 입력 중 — 나중에
+      if (_isEditingNow() || Date.now() < _selfWriteUntil) { _rtPendingReload = true; clearTimeout(_flushRetryTimer); _flushRetryTimer = setTimeout(_maybeFlushReload, 500); return; } // 입력 중이거나 방금 내가 저장 — 나중에
       _reloadKeepScroll();
     }, 700); // 몰아치는 변경은 한 번에
   };
@@ -2088,7 +2096,7 @@ function setupRealtimeSync() {
   const reloadPhotos = () => {
     clearTimeout(_rtPhotoTimer);
     _rtPhotoTimer = setTimeout(() => {
-      if (_isEditingNow()) { _rtPendingPhotos = true; return; } // 입력 중 — 나중에
+      if (_isEditingNow() || Date.now() < _selfWriteUntil) { _rtPendingPhotos = true; clearTimeout(_flushRetryTimer); _flushRetryTimer = setTimeout(_maybeFlushReload, 500); return; } // 입력 중이거나 방금 내가 저장 — 나중에
       _rtDoPhotos();
     }, 700);
   };
@@ -2103,11 +2111,7 @@ function setupRealtimeSync() {
   if (!_rtFocusoutBound) {
     _rtFocusoutBound = true;
     document.addEventListener('focusout', () => {
-      setTimeout(() => {
-        if (_isEditingNow()) return; // 아직 다른 칸 입력 중이면 계속 대기
-        if (_rtPendingReload) { _rtPendingReload = false; _reloadKeepScroll(); }
-        if (_rtPendingPhotos) { _rtPendingPhotos = false; _rtDoPhotos(); }
-      }, 350);
+      setTimeout(_maybeFlushReload, 350);
     });
   }
 }
@@ -2641,6 +2645,7 @@ function showSyncStatus(msg) {
 }
 
 function scheduleSyncToSupabase() {
+  _selfWriteUntil = Date.now() + 4000; // 내 저장 직후 4초는 실시간 리렌더 보류 (화면 튐 방지)
   clearTimeout(syncTimer);
   syncTimer = setTimeout(syncToSupabase, 2000);
 }
@@ -7906,7 +7911,7 @@ async function showCustDetail(name) {
       <!-- ④ 메모 + 활동 로그 -->
       <div style="background:#fffde7;border:1.5px solid #fde68a;border-radius:10px;padding:10px 12px;margin-bottom:4px">
         <div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:6px">📝 상담 메모 <span style="font-size:10px;font-weight:400;color:#b45309">(성격·특이사항·선호 등 누적 기록)</span></div>
-        <textarea id="cust-memo-ta-main"
+        <textarea id="cust-memo-ta-main" lang="ko"
           placeholder="상담 메모"
           style="width:100%;box-sizing:border-box;border:none;background:transparent;font-size:13px;color:#333;resize:none;outline:none;font-family:inherit;line-height:1.7;overflow:hidden;min-height:40px"
           oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px';custMemos['${safeName}']=this.value;debouncedSaveCustMemo('${safeName}')"
@@ -9388,7 +9393,7 @@ function closeDayDetail() {
 <div id="gc-wrap">
   <div id="gc-root">
     <div id="gc-head">
-      <b>💰 감탄 콘솔 <span id="gc-ver">v9</span></b>
+      <b>💰 감탄 콘솔 <span id="gc-ver">v10</span></b>
       <button id="gc-close" aria-label="닫기">✕</button>
     </div>
     <div id="gc-tabwrap"><div class="tabs" id="gc-tabs"></div></div>
