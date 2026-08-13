@@ -6505,18 +6505,15 @@ function renderMonthCal() {
       const statusBadgeMc = !hideLabel
         ? `<span style="font-size:9px;background:${stColor};color:#fff;border-radius:2px;padding:0 4px;flex-shrink:0;font-weight:700">${stLabel}</span>`
         : '';
-      // 색상: 미입금/상담/취소/연기/모니터/완료는 상태 색상, 나머지는 상품 색상
-      const specialStates = ['미입금','상담','모니터','작업중','완료'];
+      // 색상: 완료·작업중·모니터는 상품색 그대로 유지(오른쪽 글씨로 상태 구분) — 한 달치 볼 때 상품 구분이 되게.
+      // 취소=회색 / 연기=주황 / 미입금=빨강 만 예외 색으로 눈에 띄게 둔다.
       const entryColor = b.cancelled ? '#9ca3af'
         : b.postponed ? '#f97316'
         : unpaidMc ? '#dc2626'
-        : specialStates.includes(stLabel) ? stColor
         : baseColor;
       const entryBg = b.cancelled ? '#f9fafb'
         : b.postponed ? '#fff7ed'
         : unpaidMc ? '#fff5f5'
-        : stLabel==='모니터' ? '#fffbeb'
-        : stLabel==='완료' ? '#f0fdf4'
         : '';
       return `<div class="mc-entry" style="border-left-color:${entryColor};background:${entryBg}" onclick="mcSelectBooking('${b.id}')">
         <span class="mc-entry-time" style="color:${entryColor}">${fmtTime(b.time)}</span>
@@ -9393,7 +9390,7 @@ function closeDayDetail() {
 <div id="gc-wrap">
   <div id="gc-root">
     <div id="gc-head">
-      <b>💰 감탄 콘솔 <span id="gc-ver">v10</span></b>
+      <b>💰 감탄 콘솔 <span id="gc-ver">v11</span></b>
       <button id="gc-close" aria-label="닫기">✕</button>
     </div>
     <div id="gc-tabwrap"><div class="tabs" id="gc-tabs"></div></div>
