@@ -5913,6 +5913,12 @@ function closeAddModal() {
 function saveBooking() {
   const name = document.getElementById('f-name').value.trim();
   if(!name) { alert('이름을 입력해주세요.'); return; }
+  // ★ 네이버 예약 전환 시 가려진 이름(백*경)을 실명으로 안 바꾸고 저장하는 실수 방지
+  if(name.includes('*')) {
+    alert('이름에 *(가림표)가 들어있어요.\n\n네이버 예약에서 가려진 이름은 실명으로 고쳐서 저장해 주세요.\n(예: 백*경 → 백은경)');
+    const ne = document.getElementById('f-name'); if(ne){ ne.focus(); ne.select(); }
+    return;
+  }
   const phone = document.getElementById('f-phone').value.trim();
   const email = document.getElementById('f-email').value.trim();
   const familyNames = document.getElementById('f-familynames').value.trim();
@@ -9390,7 +9396,7 @@ function closeDayDetail() {
 <div id="gc-wrap">
   <div id="gc-root">
     <div id="gc-head">
-      <b>💰 감탄 콘솔 <span id="gc-ver">v11</span></b>
+      <b>💰 감탄 콘솔 <span id="gc-ver">v12</span></b>
       <button id="gc-close" aria-label="닫기">✕</button>
     </div>
     <div id="gc-tabwrap"><div class="tabs" id="gc-tabs"></div></div>
