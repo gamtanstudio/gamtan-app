@@ -993,9 +993,17 @@ let userRole = 'staff';
     <div id="growth-contract-row" style="display:none;background:#fdf2f8;border:1.5px solid #f9a8d4;border-radius:10px;padding:10px 14px;margin-bottom:8px">
       <div style="font-size:12px;font-weight:700;color:#be185d;margin-bottom:8px">🌱 가족성장 계약 설정</div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+        <label style="font-size:12px;color:#374151;font-weight:600">모집 회차</label>
+        <input type="number" id="f-cohort" min="1" placeholder="예: 6" style="width:66px;border:1px solid #f9a8d4;border-radius:6px;padding:4px 8px;font-size:12px;background:#fff">
+        <span style="font-size:11px;color:#9d174d">회차-년차로 표시 (예: 6-1)</span>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
         <label style="font-size:12px;color:#374151;font-weight:600">총 계약</label>
         <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px">
-          <input type="radio" name="f-contract-years" value="5" checked style="accent-color:#db2777"> 5년
+          <input type="radio" name="f-contract-years" value="3" checked style="accent-color:#db2777"> 3년
+        </label>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px">
+          <input type="radio" name="f-contract-years" value="5" style="accent-color:#db2777"> 5년
         </label>
         <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px">
           <input type="radio" name="f-contract-years" value="10" style="accent-color:#db2777"> 10년
@@ -1735,6 +1743,7 @@ function calcBookingPrice(b) {
     if(adults>2) add(`성인 ${adults-2}인 추가`,(adults-2)*100000,true);
     if(kids>0) add(`미성년 자녀 ${kids}인 추가`,kids*50000,true);
     if(pet) add('반려동물 추가',50000,true);
+    if(total>800000) add('80만원 상한 적용 (촬영+원본)', 800000-total, true);
   } else if(b.product==='simpfam') {
     add('감탄 심플패밀리 기본 (2인)', 100000);
     if(adults>2) add(`성인 ${adults-2}인 추가`,(adults-2)*50000,true);
@@ -1748,6 +1757,7 @@ function calcBookingPrice(b) {
       if(adults > 2) add(`성인 ${adults-2}인 추가`, (adults-2)*100000, true);
       if(kids > 0)   add(`미성년 ${kids}인 추가`,    kids*50000, true);
       if(weekend)    add('주말·공휴일 추가', 50000, true);
+      if(total>800000) add('80만원 상한 적용 (촬영+원본)', 800000-total, true);
       // 선택된 앨범 옵션
       const albumKey = b.bigfamAlbum || '20al';
       const album = BIGFAM_ALBUMS.find(a=>a.key===albumKey) || BIGFAM_ALBUMS[2];
@@ -1757,7 +1767,8 @@ function calcBookingPrice(b) {
     }
     if(pet) add('반려동물 추가',50000,true);
   } else if(b.product==='growth') {
-    add('가족성장 프로젝트 (매년)', 150000);
+    const gk = Math.max(1, kids);
+    add(`가족성장 ${2+gk}인 (자녀 ${gk}명) · 1년분`, 150000 + (gk-1)*20000);
   } else if(b.product==='kids') {
     add('베이비&키즈 프로필 (1인)', 150000);
     if(weekend) add('주말·공휴일 추가',50000,true);
@@ -1871,7 +1882,7 @@ function showReferrerDrop(safeName, q) {
     return `<div onclick="selectReferrer('${safeName}','${storeVal.replace(/'/g,"\\'")}');hideReferrerDrop('${safeName}')"
       style="padding:7px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid #f0f0f0"
       onmouseover="this.style.background='#f0f0ff'" onmouseout="this.style.background=''">
-      <b>${escHtml(c.name)}</b>${hasDup && c.phone ? `<span style="color:#888;margin-left:5px">${c.phone}</span>` : ''}
+      <b>${escHtml(dispName(c.name))}</b>${hasDup && c.phone ? `<span style="color:#888;margin-left:5px">${c.phone}</span>` : ''}
     </div>`;
   }).join('');
   drop.style.display = 'block';
@@ -2868,6 +2879,11 @@ function saveDeliveryField(bid, field, value, custName) {
 
 function genId() { return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// 화면 표시용 이름 정리 — SM 분류 꼬리표(증명·가족 등 괄호)만 숨김. 동명이인 (2)·(3)은 유지. 원본 name/키/그룹핑은 안 건드리고 보이는 글자만 정리.
+function dispName(s){
+  if(!s) return s;
+  return String(s).replace(/\s*\(([^()]*)\)\s*$/, function(m, inner){ return /^\d+$/.test(inner.trim()) ? m : ''; }).trim() || s;
+}
 
 // ====================== 가격 편집 ======================
 function initPriceItems(b) {
@@ -3800,10 +3816,10 @@ function renderCustSearch() {
       return `<div onclick="selectCustFromPopup('${safeName}')"
         style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:#fff;border:1px solid #e5e7eb;border-radius:9px;cursor:pointer;transition:background .1s"
         onmouseover="this.style.background='#f0f0ff'" onmouseout="this.style.background='#fff'">
-        <div style="width:36px;height:36px;border-radius:50%;background:#6366f1;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;flex-shrink:0">${escHtml(c.name.slice(0,1))}</div>
+        <div style="width:36px;height:36px;border-radius:50%;background:#6366f1;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;flex-shrink:0">${escHtml(dispName(c.name).slice(0,1))}</div>
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <span style="font-size:15px;font-weight:800;color:#1a1a2e">${escHtml(c.name)}</span>
+            <span style="font-size:15px;font-weight:800;color:#1a1a2e">${escHtml(dispName(c.name))}</span>
             ${c.phone?`<span style="font-size:12px;color:#6b7280">${c.phone}</span>`:''}
             ${motiveTag}
           </div>
@@ -3940,10 +3956,10 @@ function renderCustSearchPopup() {
     el.onmouseout  = function(){ this.style.background=''; };
     el.onclick = (function(name){ return function(){ selectCustFromPopup(name); }; })(c.name);
     el.innerHTML =
-      '<div style="width:38px;height:38px;border-radius:50%;background:#6366f1;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;flex-shrink:0">' + escHtml(c.name.slice(0,1)) + '</div>' +
+      '<div style="width:38px;height:38px;border-radius:50%;background:#6366f1;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;flex-shrink:0">' + escHtml(dispName(c.name).slice(0,1)) + '</div>' +
       '<div style="flex:1;min-width:0">' +
         '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
-          '<span style="font-size:15px;font-weight:800;color:#1a1a2e">' + escHtml(c.name) + '</span>' +
+          '<span style="font-size:15px;font-weight:800;color:#1a1a2e">' + escHtml(dispName(c.name)) + '</span>' +
           (c.phone ? '<span style="font-size:12px;color:#6b7280">' + escHtml(c.phone) + '</span>' : '') +
           motiveTag +
         '</div>' +
@@ -4167,7 +4183,7 @@ function renderGrowthAlerts() {
     const hasNext = bookings.some(x=>x.contractId===b.contractId&&(x.contractYear||1)===maxYr+1&&!x.cancelled);
     if(hasNext) { seen.add(b.contractId); return; }
     seen.add(b.contractId);
-    overdueList.push({name:latest.name, yr:maxYr, totalYrs, date:latest.date, id:latest.id});
+    overdueList.push({name:latest.name, yr:maxYr, totalYrs, date:latest.date, id:latest.id, cohort:latest.cohort});
   });
 
   // 3) 📞 출고연락 전 — 준비 다 끝났는데 아직 손님에게 연락 안 한 예약
@@ -4185,7 +4201,7 @@ function renderGrowthAlerts() {
         const safeName = (b.name||'').replace(/'/g,"\\'");
         const pd = PRODUCTS[b.product]?.name || '';
         return `<div style="display:flex;align-items:center;justify-content:space-between;background:#fff;border-radius:7px;padding:5px 9px;border:1px solid #fdba74">
-          <span style="font-size:12px;color:#1a1a2e;font-weight:600">${escHtml(b.name)} <span style="color:#c2410c;font-size:11px">${pd}</span></span>
+          <span style="font-size:12px;color:#1a1a2e;font-weight:600">${escHtml(dispName(b.name))} <span style="color:#c2410c;font-size:11px">${pd}</span></span>
           <button onclick="showCustDetail('${safeName}')" style="font-size:11px;background:#f97316;color:#fff;border:none;border-radius:6px;padding:3px 9px;cursor:pointer;font-weight:600">📞 연락하기</button>
         </div>`;
       }).join('')}
@@ -4202,7 +4218,7 @@ function renderGrowthAlerts() {
         const curYr = b.contractYear||1;
         const totalYrs = b.contractYears||5;
         return `<div style="display:flex;align-items:center;justify-content:space-between;background:#fff;border-radius:7px;padding:5px 9px;border:1px solid #f9a8d4">
-          <span style="font-size:12px;color:#1a1a2e;font-weight:600">${escHtml(b.name)} <span style="color:#be185d;font-size:11px">${totalYrs}년 계약·${curYr}년차</span></span>
+          <span style="font-size:12px;color:#1a1a2e;font-weight:600">${escHtml(dispName(b.name))} <span style="color:#be185d;font-size:11px">${b.cohort?b.cohort+'-'+curYr+'회차 · ':''}${totalYrs}년 계약·${curYr}년차</span></span>
           <button onclick="showCustDetail('${safeName}')" style="font-size:11px;background:#db2777;color:#fff;border:none;border-radius:6px;padding:3px 9px;cursor:pointer;font-weight:600">📅 날짜 확정</button>
         </div>`;
       }).join('')}
@@ -4217,7 +4233,7 @@ function renderGrowthAlerts() {
       ${overdueList.map(item=>{
         const safeName = item.name.replace(/'/g,"\\'");
         return `<div style="display:flex;align-items:center;justify-content:space-between;background:#fff;border-radius:7px;padding:5px 9px;border:1px solid #fed7aa">
-          <span style="font-size:12px;color:#1a1a2e;font-weight:600">${escHtml(item.name)} <span style="color:#c2410c;font-size:11px">${item.totalYrs}년 계약·${item.yr}년차 완료 (${fmtDateKo(item.date)})</span></span>
+          <span style="font-size:12px;color:#1a1a2e;font-weight:600">${escHtml(dispName(item.name))} <span style="color:#c2410c;font-size:11px">${item.cohort?item.cohort+'-'+item.yr+'회차 · ':''}${item.totalYrs}년 계약·${item.yr}년차 완료 (${fmtDateKo(item.date)})</span></span>
           <button onclick="showCustDetail('${safeName}')" style="font-size:11px;background:#f97316;color:#fff;border:none;border-radius:6px;padding:3px 9px;cursor:pointer;font-weight:600">➕ 예약 추가</button>
         </div>`;
       }).join('')}
@@ -5236,7 +5252,7 @@ function renderWorkflow(b) {
     <div id="cust-card">
       <span class="prod-badge" style="background:${p.color}">${p.name}${(b.product==='bigfam'&&b.bigfamUpgrade) ? ' → ' + (BIGFAM_ALBUMS.find(a=>a.key===(b.bigfamAlbum||'20al'))?.label||'앨범') : ''}</span>
       <div id="cust-info">
-        <h3>${b.name}님 <span style="font-size:12px;background:#e0e7ff;color:#4338ca;border-radius:6px;padding:2px 7px;font-weight:700;vertical-align:middle">#${custNoWf}</span>
+        <h3>${escHtml(dispName(b.name))}님 <span style="font-size:12px;background:#e0e7ff;color:#4338ca;border-radius:6px;padding:2px 7px;font-weight:700;vertical-align:middle">#${custNoWf}</span>
           <span style="font-size:12px;font-weight:700;color:${curColor};background:#f9f9f9;border-radius:6px;padding:2px 7px;margin-left:4px">${curLabel}</span>
         </h3>
         <p>${personStr} · ${fmtDateKo(b.date)} ${fmtTime(b.time)}</p>
@@ -5797,7 +5813,7 @@ function openAddModal() {
   if(cyEl) cyEl.value='1';
   const tbdCb = document.getElementById('f-date-tbd');
   if(tbdCb) tbdCb.checked=false;
-  const cyRadio = document.querySelector('input[name="f-contract-years"][value="5"]');
+  const cyRadio = document.querySelector('input[name="f-contract-years"][value="3"]');
   if(cyRadio) cyRadio.checked=true;
   document.getElementById('f-date').disabled=false;
   document.getElementById('btn-delete-booking').style.display='none';
@@ -5854,6 +5870,8 @@ function openEditModal(id) {
   if(b.product==='growth') {
     const cyEl2 = document.getElementById('f-contract-year');
     if(cyEl2) cyEl2.value = b.contractYear||1;
+    const cohEl = document.getElementById('f-cohort');
+    if(cohEl) cohEl.value = b.cohort||'';
     const cyR = document.querySelector(`input[name="f-contract-years"][value="${b.contractYears||5}"]`);
     if(cyR) cyR.checked = true;
     const tbdCb2 = document.getElementById('f-date-tbd');
@@ -5910,8 +5928,9 @@ function saveBooking() {
   const idIdCardAdd   = product==='id' ? (document.getElementById('f-id-idcard-add')?.checked   || false) : false;
   // 가족성장 계약 필드
   const dateTbd       = product==='growth' ? (document.getElementById('f-date-tbd')?.checked||false) : false;
-  const contractYears = product==='growth' ? parseInt(document.querySelector('input[name="f-contract-years"]:checked')?.value||'5') : undefined;
+  const contractYears = product==='growth' ? parseInt(document.querySelector('input[name="f-contract-years"]:checked')?.value||'3') : undefined;
   const contractYear  = product==='growth' ? parseInt(document.getElementById('f-contract-year')?.value||'1') : undefined;
+  const cohort        = product==='growth' ? (parseInt(document.getElementById('f-cohort')?.value)||null) : undefined;
 
   if(!dateTbd && !date) { alert('날짜를 선택해주세요.'); return; }
 
@@ -5970,13 +5989,13 @@ function saveBooking() {
       const priceChanged = b.product!==product || Number(b.adults)!==adults || Number(b.kids)!==kids || !!b.pet!==pet || !!b.weekend!==weekend
         || (product==='id' && (b.idType!==idType || !!b.idWebFile!==idWebFile || !!b.idPassportAdd!==idPassportAdd || !!b.idIdCardAdd!==idIdCardAdd));
       Object.assign(b, {name,phone,email,familyNames,product,adults,kids,childName,date,time,hasKids,pet,weekend,postponedDate,snsConsent,idType,idWebFile,idPassportAdd,idIdCardAdd,dateTbd});
-      if(product==='growth') { b.contractYears=contractYears; b.contractYear=contractYear; }
+      if(product==='growth') { b.contractYears=contractYears; b.contractYear=contractYear; b.cohort=cohort; }
       if(priceChanged) { delete b.priceItems; delete b.payments; }
     }
   } else {
     const newId = genId();
     const contractId = product==='growth' && contractYear===1 ? 'cid_'+newId : undefined;
-    bookings.push({id:newId,name,phone,email,familyNames,product,adults,kids,childName,date,time,hasKids,pet,weekend,postponedDate,snsConsent,idType,idWebFile,idPassportAdd,idIdCardAdd,currentStage:0,stageChecks:{},dateTbd,contractYears,contractYear,contractId});
+    bookings.push({id:newId,name,phone,email,familyNames,product,adults,kids,childName,date,time,hasKids,pet,weekend,postponedDate,snsConsent,idType,idWebFile,idPassportAdd,idIdCardAdd,currentStage:0,stageChecks:{},dateTbd,contractYears,contractYear,cohort,contractId});
   }
   // ── 전화번호로 상담 기록 통합 ──────────────────────────────────────
   // 신규 예약 저장 시: 같은 전화번호의 _phonePlaceholder 고객이 있으면
@@ -6015,7 +6034,7 @@ function saveBooking() {
   if(!editId) {
     const newB = bookings[bookings.length-1];
     const pName = (PRODUCTS[product]||PRODUCTS.story).name;
-    const yearTag = product==='growth'&&contractYear ? ` ${contractYear}년차` : '';
+    const yearTag = product==='growth'&&contractYear ? ` ${cohort?cohort+'-'+contractYear+'회차':contractYear+'년차'}` : '';
     const dateTag = dateTbd ? '(날짜 미정)' : `${fmtDateKo(date)} ${time}`;
     addCustLog(name, `예약 등록 — ${pName}${yearTag} ${dateTag}`);
   }
@@ -6112,9 +6131,27 @@ function deleteStep1Cancel() {
   btn.style.opacity='1';
   btn.disabled=false;
 }
-function deleteBooking() {
+async function deleteBooking() {
   const editId = document.getElementById('edit-id').value;
   if(!editId) return;
+  const b = bookings.find(x=>x.id===editId);
+  const isManual = b && !b.smmate && !String(editId).startsWith('sm_');
+  // SM메이트에서 온 예약은 여기서 삭제 불가 (schedules가 원본 — 지워도 새로고침 때 다시 옴)
+  if(b && !isManual){
+    alert('SM메이트에서 온 예약은 여기서 삭제할 수 없어요.\nSM메이트에서 삭제하거나, "취소" 처리를 이용해 주세요.');
+    return;
+  }
+  // ★ 서버(manual_bookings)에서도 삭제 — 안 하면 실시간 갱신/새로고침 때 되살아남 (삭제 안 되던 원인)
+  if(isManual && typeof supa!=='undefined' && currentUser){
+    try{
+      const { error } = await supa.from('manual_bookings').delete().eq('id', editId);
+      if(error){
+        console.error('예약 삭제 실패:', error);
+        alert('서버에서 삭제하지 못했어요.\n\n'+(error.message||JSON.stringify(error))+'\n\n(권한 문제일 수 있어요. 이 메시지를 캡처해서 알려주세요.)');
+        return; // 서버 삭제 실패 시 로컬도 지우지 않음 (되살아나는 혼란 방지)
+      }
+    }catch(e){ console.error(e); alert('서버 삭제 오류: '+(e.message||e)); return; }
+  }
   bookings = bookings.filter(x=>x.id!==editId);
   if(selectedId===editId) { selectedId=null; }
   saveBookings();
@@ -6152,12 +6189,76 @@ function toggleReview(e, id) {
   }
 }
 
-function deleteBookingDirect(id) {
+async function deleteBookingDirect(id) {
+  const b = bookings.find(x=>x.id===id);
+  const isManual = b && !b.smmate && !String(id).startsWith('sm_');
+  if(b && !isManual){
+    alert('SM메이트에서 온 예약은 여기서 삭제할 수 없어요.\nSM메이트에서 삭제하거나 "취소" 처리를 이용해 주세요.');
+    return;
+  }
   if(!confirm('이 예약을 삭제하시겠습니까?')) return;
+  if(isManual && typeof supa!=='undefined' && currentUser){
+    try{
+      const { error } = await supa.from('manual_bookings').delete().eq('id', id);
+      if(error){
+        console.error('예약 삭제 실패:', error);
+        alert('서버에서 삭제하지 못했어요.\n\n'+(error.message||JSON.stringify(error))+'\n\n캡처해서 알려주세요.');
+        return;
+      }
+    }catch(e){ console.error(e); alert('서버 삭제 오류: '+(e.message||e)); return; }
+  }
   bookings = bookings.filter(x=>x.id!==id);
   if(selectedId===id) { selectedId=null; clearWorkflow(); }
   saveBookings();
   renderList();
+}
+
+// ====================== 고객 이름 수정 (직접 등록한 예약만) ======================
+function renameCustomerPrompt(safeName){
+  const oldName = safeName.replace(/\\'/g,"'");
+  const nv = prompt('새 이름을 입력하세요.\n\n· 직접 등록한 예약만 바뀝니다 (SM메이트 예약 제외)\n· 고객번호·메모·기록·추가정보는 그대로 따라갑니다\n· 이미 있는 이름을 넣으면 그 카드와 합쳐집니다', dispName(oldName));
+  if(nv===null) return;
+  renameCustomer(oldName, nv.trim());
+}
+async function renameCustomer(oldName, newName){
+  newName = (newName||'').trim();
+  if(!newName){ alert('이름을 입력해주세요.'); return; }
+  if(newName===oldName) return;
+  const custBks = bookings.filter(b=>b.name===oldName);
+  if(!custBks.length){ alert('대상 고객을 찾지 못했어요.'); return; }
+  // 안전장치: SM메이트 예약이 섞여 있으면 중단 (SM 이름은 여기서 못 바꿈 — 새로고침 때 되돌아오고 작업상태 키가 어긋남)
+  if(custBks.some(b=>b.smmate || String(b.id).startsWith('sm_'))){
+    alert('이 고객에는 SM메이트 예약이 있어 여기서는 이름을 바꿀 수 없어요.\n직접 등록한 예약만 이름 수정이 됩니다.');
+    return;
+  }
+  // 대상 이름에 이미 다른 고객이 있으면 = 합치기
+  if(bookings.some(b=>b.name===newName)){
+    if(!confirm('이미 "'+dispName(newName)+'" 고객이 있어요.\n두 카드가 하나로 합쳐집니다. 계속할까요?')) return;
+  }
+  // 예약 이름 변경 (수동만) — manual_bookings jsonb에 그대로 저장되어 영구 반영
+  custBks.forEach(b=>{ b.name=newName; });
+  // 이름을 키로 쓰는 로컬 데이터 이전 (대상에 이미 값이 있으면 대상 우선 = 합치기)
+  const move=(m)=>{ if(m && m[oldName]!=null){ if(m[newName]==null) m[newName]=m[oldName]; delete m[oldName]; } };
+  move(custNumbers); move(custMemos); move(custLogs); move(custExtra); move(custProfiles);
+  if(window._smProducts) move(window._smProducts);
+  saveCustNumbers();
+  // 서버(이름 키 테이블)에 새 이름으로 반영 — 옛 이름 행은 참조가 없어 무해
+  try{
+    if(typeof supa!=='undefined' && currentUser){
+      saveCustNoToServer(newName);
+      if(custMemos[newName]!=null) saveCustMemos(newName);
+      if(custLogs[newName]!=null)  saveCustLogs(newName);
+      if(custProfiles[newName]) ['familyInfo','husbandName','childNames'].forEach(f=>{ if(custProfiles[newName][f]!=null) setCustProfile(newName,f,custProfiles[newName][f]); });
+      if(custExtra[newName]!=null){
+        supa.from('cust_extra').upsert({ name:newName, data:custExtra[newName], updated_at:new Date().toISOString() }, { onConflict:'name' })
+          .then(({error})=>{ if(error) console.error('추가정보 저장 실패:', error); });
+      }
+    }
+  }catch(e){ console.error('이름변경 서버반영 일부 실패:', e); }
+  saveBookings();
+  addCustLog(newName, '고객 이름 변경: '+oldName+' → '+newName);
+  _lastCustName=null;
+  showCustDetail(newName);
 }
 
 // ====================== 월간 캘린더 ======================
@@ -6338,7 +6439,7 @@ function renderMonthCal() {
         const isCancel = b._mcType === 'cancelled';
         return `<div class="mc-entry" style="border-left-color:${isCancel?'#9ca3af':nc};opacity:${isCancel?0.55:1}" onclick="event.stopPropagation();showNaverResv('${b.booking_no}')">
           <span class="mc-entry-time" style="color:${isCancel?'#9ca3af':nc}">${fmtTime(b.time)}</span>
-          <span class="mc-entry-name" style="color:${isCancel?'#9ca3af':'#1a1a2e'};${isCancel?'text-decoration:line-through;':''}">${escHtml(b.name)}</span>
+          <span class="mc-entry-name" style="color:${isCancel?'#9ca3af':'#1a1a2e'};${isCancel?'text-decoration:line-through;':''}">${escHtml(dispName(b.name))}</span>
           <span style="font-size:8px;background:${isCancel?'#9ca3af':nc};color:#fff;border-radius:2px;padding:0 3px;flex-shrink:0;font-weight:800" title="네이버 예약">N</span>
           ${isCancel?'<span style="font-size:9px;background:#9ca3af;color:#fff;border-radius:2px;padding:0 3px;flex-shrink:0">취소</span>':''}
         </div>`;
@@ -6358,7 +6459,7 @@ function renderMonthCal() {
       if(isCancelledMc) {
         return `<div class="mc-entry" style="border-left-color:#9ca3af;opacity:0.55" onclick="mcSelectBooking('${b.id}')">
           <span class="mc-entry-time" style="color:#9ca3af">${fmtTime(b.time)}</span>
-          <span class="mc-entry-name" style="color:#9ca3af;text-decoration:line-through">${escHtml(b.name)}-${shortProd}</span>
+          <span class="mc-entry-name" style="color:#9ca3af;text-decoration:line-through">${escHtml(dispName(b.name))}-${shortProd}</span>
           <span style="font-size:9px;background:#9ca3af;color:#fff;border-radius:2px;padding:0 3px;flex-shrink:0">취소</span>
         </div>`;
       }
@@ -6366,7 +6467,7 @@ function renderMonthCal() {
       if(isPostponedOrig) {
         return `<div class="mc-entry" style="border-left-color:#f97316;opacity:0.65" onclick="mcSelectBooking('${b.id}')">
           <span class="mc-entry-time" style="color:#c2410c">${fmtTime(b.time)}</span>
-          <span class="mc-entry-name" style="color:#c2410c;text-decoration:line-through">${escHtml(b.name)}-${shortProd}</span>
+          <span class="mc-entry-name" style="color:#c2410c;text-decoration:line-through">${escHtml(dispName(b.name))}-${shortProd}</span>
           <span style="font-size:9px;background:#f97316;color:#fff;border-radius:2px;padding:0 3px;flex-shrink:0">연기</span>
         </div>`;
       }
@@ -6374,7 +6475,7 @@ function renderMonthCal() {
       if(isPostponedNew) {
         return `<div class="mc-entry" style="border-left-color:#f97316" onclick="mcSelectBooking('${b.id}')">
           <span class="mc-entry-time" style="color:#c2410c">${fmtTime(b.time)}</span>
-          <span class="mc-entry-name" style="color:#c2410c">${escHtml(b.name)}-${shortProd}${visitN?` <span style="opacity:.75">${visitN}</span>`:''}</span>
+          <span class="mc-entry-name" style="color:#c2410c">${escHtml(dispName(b.name))}-${shortProd}${visitN?` <span style="opacity:.75">${visitN}</span>`:''}</span>
           <span style="font-size:9px;background:#f97316;color:#fff;border-radius:2px;padding:0 3px;flex-shrink:0">연기됨</span>
         </div>`;
       }
@@ -6382,7 +6483,7 @@ function renderMonthCal() {
       if(b._phonePlaceholder) {
         return `<div class="mc-entry" style="border-left-color:#dc2626;background:#fff5f5" onclick="mcSelectBooking('${b.id}')">
           <span class="mc-entry-time" style="color:#dc2626">${fmtTime(b.time)}</span>
-          <span class="mc-entry-name" style="color:#dc2626;font-weight:700">${escHtml(b.name)}</span>
+          <span class="mc-entry-name" style="color:#dc2626;font-weight:700">${escHtml(dispName(b.name))}</span>
           <span style="font-size:9px;background:#dc2626;color:#fff;border-radius:2px;padding:0 4px;flex-shrink:0;font-weight:700">상담</span>
         </div>`;
       }
@@ -6414,7 +6515,7 @@ function renderMonthCal() {
         : '';
       return `<div class="mc-entry" style="border-left-color:${entryColor};background:${entryBg}" onclick="mcSelectBooking('${b.id}')">
         <span class="mc-entry-time" style="color:${entryColor}">${fmtTime(b.time)}</span>
-        <span class="mc-entry-name" style="color:${entryColor}">${escHtml(b.name)}-${shortProd}${visitN?` <span style="opacity:.75">${visitN}</span>`:''}</span>
+        <span class="mc-entry-name" style="color:${entryColor}">${escHtml(dispName(b.name))}-${shortProd}${visitN?` <span style="opacity:.75">${visitN}</span>`:''}</span>
         ${statusBadgeMc}
       </div>`;
 
@@ -7289,7 +7390,7 @@ async function showCustDetail(name) {
     if(window.innerWidth <= 768) {
       right.classList.add('mobile-show');
       const nameEl = document.getElementById('mobile-back-name');
-      if(nameEl) nameEl.textContent = name + '님';
+      if(nameEl) nameEl.textContent = dispName(name) + '님';
     }
   }
   document.getElementById('empty-state').style.display='none';
@@ -7352,8 +7453,9 @@ async function showCustDetail(name) {
       const curYr    = b.contractYear||1;
       // 같은 계약의 다음 연도 예약이 이미 있는지 확인
       const hasNextYear = b.contractId && bookings.some(x=>x.contractId===b.contractId && (x.contractYear||1)===curYr+1 && !x.cancelled);
-      const canAddNext  = curYr < totalYrs && !hasNextYear;
+      const canAddNext  = !hasNextYear;
       return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid #f5f5f5">
+        ${b.cohort?`<span style="background:#be185d;color:#fff;border-radius:6px;padding:2px 9px;font-size:11px;font-weight:700">${b.cohort}-${curYr}회차</span>`:''}
         <span style="background:#fce7f3;color:#be185d;border-radius:6px;padding:2px 9px;font-size:11px;font-weight:700">🌱 ${totalYrs}년 계약 중 ${curYr}년차</span>
         ${canAddNext?`<button onclick="addNextYearBooking('${b.id}','${safeName}')" style="background:#db2777;color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer;font-weight:600">➕ ${curYr+1}년차 예약 추가</button>`:''}
         ${curYr>=totalYrs?`<span style="font-size:11px;color:#059669;font-weight:700">🎉 계약 완료!</span>`:''}
@@ -7677,8 +7779,9 @@ async function showCustDetail(name) {
       <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px">
         <div style="flex:1">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px">
-            <span style="font-size:20px;font-weight:800;color:#1a1a2e">${escHtml(name)}님</span>
+            <span style="font-size:20px;font-weight:800;color:#1a1a2e">${escHtml(dispName(name))}님</span>
             <span style="font-size:13px;background:#e0e7ff;color:#4338ca;border-radius:6px;padding:2px 8px;font-weight:700">#${custNo}</span>
+            ${allBks.length && allBks.every(x=>!x.smmate && !String(x.id).startsWith('sm_')) ? `<button onclick="renameCustomerPrompt('${safeName}')" style="font-size:11px;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;border-radius:6px;padding:2px 8px;cursor:pointer;font-weight:600">✏️ 이름수정</button>` : ''}
             <span style="font-size:13px;font-weight:700;color:${latestColor}">${latestStatus}</span>
             ${hasSns?`<span style="font-size:12px;background:#fef2f2;color:#dc2626;border-radius:6px;padding:2px 8px;font-weight:700">📷 SNS동의</span>`:`<span style="font-size:12px;color:#9ca3af">SNS미동의</span>`}
           </div>
@@ -7930,12 +8033,18 @@ function addNextYearBooking(bid, custName) {
   const b = bookings.find(x=>x.id===bid);
   if(!b) return;
   const curYr = b.contractYear||1;
-  const totalYrs = b.contractYears||5;
-  if(curYr >= totalYrs) { alert('이미 마지막 년차입니다.'); return; }
+  let totalYrs = b.contractYears||5;
   const nextYr = curYr + 1;
   // 이미 다음 연도 예약이 있는지 체크
   const exists = b.contractId && bookings.some(x=>x.contractId===b.contractId && (x.contractYear||1)===nextYr && !x.cancelled);
   if(exists) { alert(`${nextYr}년차 예약이 이미 있습니다.`); return; }
+  // 계약 기간을 넘어서면 확인 후 연장 (예: 3년 계약을 6-4·6-5로 계속)
+  if(nextYr > totalYrs) {
+    if(!confirm(`계약 ${totalYrs}년을 넘어 ${nextYr}년차를 추가합니다.\n계약 기간을 ${nextYr}년으로 늘릴까요?`)) return;
+    totalYrs = nextYr;
+    if(b.contractId) bookings.forEach(x=>{ if(x.contractId===b.contractId) x.contractYears = totalYrs; });
+    else b.contractYears = totalYrs;
+  }
   const newId = Date.now().toString();
   const newBooking = {
     id: newId,
@@ -7954,13 +8063,14 @@ function addNextYearBooking(bid, custName) {
     dateTbd: true,
     contractYears: totalYrs,
     contractYear: nextYr,
+    cohort: b.cohort,
     contractId: b.contractId,
     familyNames: b.familyNames||'',
     createdAt: new Date().toLocaleDateString('ko-KR')
   };
   bookings.push(newBooking);
   saveBookings();
-  addCustLog(custName, `가족성장 ${nextYr}년차 예약 추가 (날짜 미정)`);
+  addCustLog(custName, `가족성장 ${b.cohort?b.cohort+'-'+nextYr+'회차':nextYr+'년차'} 예약 추가 (날짜 미정)`);
   showCustDetail(custName);
   alert(`${nextYr}년차 예약이 추가되었습니다.\n날짜는 확정 후 수정해 주세요.`);
 }
@@ -8408,7 +8518,7 @@ function renderGSearch() {
     return `<div style="border:1px solid #e8e8e8;border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer;background:#fff"
       onclick="closeGSearch();selectCustFromPopup('${b.name.replace(/'/g,"\\'")}')">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px">
-        <span style="font-size:13px;font-weight:700;color:#1a1a2e">${escHtml(b.name)}</span>
+        <span style="font-size:13px;font-weight:700;color:#1a1a2e">${escHtml(dispName(b.name))}</span>
         <span style="font-size:11px;background:${p.color};color:#fff;border-radius:6px;padding:1px 7px">${p.name}</span>
         ${t>0?`<span style="font-size:11px;background:#dbeafe;color:#1d4ed8;border-radius:6px;padding:1px 5px">👥${t}명</span>`:''}
         <span style="font-size:11px;font-weight:700;color:${stc}">${stl}</span>
@@ -9195,7 +9305,7 @@ function openDayDetail(ds) {
           </div>
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px">
-              <span style="font-size:15px;font-weight:800;${nameStyle}">${escHtml(b.name)}</span>
+              <span style="font-size:15px;font-weight:800;${nameStyle}">${escHtml(dispName(b.name))}</span>
               <span style="font-size:11px;background:${p.color};color:#fff;border-radius:4px;padding:1px 6px;font-weight:700">${prodName}</span>
               ${statusBadge}
             </div>
@@ -9278,7 +9388,7 @@ function closeDayDetail() {
 <div id="gc-wrap">
   <div id="gc-root">
     <div id="gc-head">
-      <b>💰 감탄 콘솔 <span id="gc-ver">v7</span></b>
+      <b>💰 감탄 콘솔 <span id="gc-ver">v9</span></b>
       <button id="gc-close" aria-label="닫기">✕</button>
     </div>
     <div id="gc-tabwrap"><div class="tabs" id="gc-tabs"></div></div>
@@ -9514,6 +9624,11 @@ function calc(prodKey, o){
     if(o.pet)      add('반려동물 추가', P.petAdd, true);
   } else {
     add(P.name, P.base);
+  }
+
+  // 감탄스토리 촬영+원본 80만원 상한 (큰 액자·앨범은 상한 위에 별도 가산)
+  if(eff==='story' && total>800000){
+    add('80만원 상한 적용 (촬영+원본)', 800000-total, true);
   }
 
   // 추가 액자 · 앨범
