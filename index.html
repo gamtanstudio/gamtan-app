@@ -1805,6 +1805,9 @@ function reserveBlock(b) {
 // ====================== STORAGE ======================
 let bookings = [];
 let naverReservations = []; // 네이버 스마트플레이스 예약 (마스킹 이름, 캘린더 표시용)
+// ★ 앱에서 삭제한 SM 예약의 smmate_id 모음 — 새로고침해도 안 돌아오게 (기기 간 동기화)
+let smDeletedIds = new Set();
+try { smDeletedIds = new Set(JSON.parse(localStorage.getItem('gamtan_sm_deleted')||'[]')); } catch(e) { smDeletedIds = new Set(); }
 let _pendingNaverNo = ''; // 고객 등록으로 전환 중인 네이버 예약번호 (저장 성공 시 삭제)
 let _pendingNaverMemo = ''; // 네이버 원문(옵션·금액·요청) — 저장 시 예약 메모로
 let _lastWfId = null; // 직전에 그린 워크플로우 예약 id (같으면 편집 후 재렌더 → 스크롤 유지)
@@ -2210,7 +2213,7 @@ async function loadFromSupabase() {
           visitNote: (s.memo || '').trim(),
           memo: '',
         };
-      }).filter(b => b.name && b.date);
+      }).filter(b => b.name && b.date).filter(b => !smDeletedIds.has(b.smmate_id)); // ★ 앱에서 삭제한 SM 예약 제외
 
       const localBks = JSON.parse(localStorage.getItem('gamtan_bookings')||'[]');
       const localOnly = localBks.filter(b => !b.smmate && !(b.name||'').includes('*'));
@@ -2252,7 +2255,12 @@ async function loadFromSupabase() {
         const cached = cachedMap[b.id];
         if(!cached) return b;
         const merged = Object.assign({}, cached);        // 로컬 작업상태 전부 유지
-        SM_FRESH_FIELDS.forEach(f => { merged[f] = b[f]; }); // 예약정보만 SM 최신값으로
+        if(cached._smEdited) {
+          // ★ 앱에서 수정한 SM 예약 → 앱 값이 이김. 고객번호(customer_no)만 SM 값으로 고정.
+          merged.customer_no = b.customer_no || cached.customer_no;
+        } else {
+          SM_FRESH_FIELDS.forEach(f => { merged[f] = b[f]; }); // 안 건드린 예약만 SM 최신값으로
+        }
         merged.smmate = true;
         merged.smmate_id = b.smmate_id;
         return merged;
@@ -2358,8 +2366,20 @@ async function loadFromSupabase() {
       if (stateRows.length > 0) {
         const stateMap = {};
         stateRows.forEach(r => { if (r.booking_key) stateMap[r.booking_key] = r.state || {}; });
+        // ★ 삭제 기록(smdel:) 수집 — 다른 기기에서 삭제한 SM 예약도 여기서 사라지게
+        stateRows.forEach(r => {
+          if (r.booking_key && r.booking_key.indexOf('smdel:') === 0) {
+            smDeletedIds.add(r.booking_key.slice(6));
+          }
+        });
+        if (smDeletedIds.size) {
+          try { localStorage.setItem('gamtan_sm_deleted', JSON.stringify([...smDeletedIds])); } catch(e) {}
+          bookings = bookings.filter(b => !(b.smmate && smDeletedIds.has(b.smmate_id)));
+        }
         bookings = bookings.map(b => {
-          const st = stateMap[bookingStateKey(b)];
+          // 새 키 우선, 없으면 옛 키(이름|날짜|시간) 폴백 — 기존 작업기록 보존
+          let st = stateMap[bookingStateKey(b)];
+          if (!st && b.smmate) st = stateMap[bookingStateKeyLegacy(b)];
           return st ? Object.assign({}, b, st) : b;
         });
         // 병합 결과를 로컬 캐시에도 반영
@@ -2658,6 +2678,7 @@ function scheduleSyncToSupabase() {
 // SM 예약 중 로컬에서 편집된(보존해야 할) 건인지 판단
 function smHasLocalState(b) {
   return !!(
+    b._smEdited ||
     b.smmate_price_override || b.photoSelected || b.pickupContacted || b.reviewed ||
     b.snsConsent || b.cancelled || b.postponed || b.dateTbd ||
     (b.workChecks && Object.keys(b.workChecks).length > 0) ||
@@ -2668,6 +2689,12 @@ function smHasLocalState(b) {
 }
 // ★ 기기 간 동기화용: 예약 식별키(이름|날짜|시간) — new_id가 바뀌어도 불변
 function bookingStateKey(b) {
+  // SM 예약은 안정적인 smmate_id로 키를 잡는다 — 이름·날짜·시간을 바꿔도 작업기록이 안 끊김
+  if (b.smmate && b.smmate_id) return 'smid:' + b.smmate_id;
+  return `${(b.name||'').trim()}|${(b.date||'').trim()}|${(b.time||'').trim()}`;
+}
+// 옛 키(이름|날짜|시간) — 기존에 저장된 작업기록을 폴백으로 읽기 위해 유지
+function bookingStateKeyLegacy(b) {
   return `${(b.name||'').trim()}|${(b.date||'').trim()}|${(b.time||'').trim()}`;
 }
 // 저장할 작업 상태만 추출 (기본 예약정보는 제외 — Supabase에서 옴)
@@ -2684,6 +2711,13 @@ function extractBookingState(b) {
   if (b.dateTbd)   s.dateTbd = true;
   if (b.snsConsent) s.snsConsent = true;
   if (b.memo && b.memo.trim()) s.memo = b.memo;
+  if (b._smEdited) {
+    // ★ 앱에서 수정한 SM 예약의 기본정보도 저장 → 기기 간에도 앱 값이 유지됨. 고객번호는 절대 저장 안 함(항상 SM 값 고정).
+    s._smEdited = true;
+    ['name','date','time','phone','email','product','adults','kids','childName','familyNames','weekend','pet','hasKids','idType','idWebFile','idPassportAdd','idIdCardAdd','postponedDate','contractYears','contractYear','cohort'].forEach(f => {
+      if (b[f] !== undefined) s[f] = b[f];
+    });
+  }
   if (b.smmate_price_override) {
     s.smmate_price_override = true;
     if (b.priceItems) s.priceItems = b.priceItems;
@@ -6004,6 +6038,7 @@ function saveBooking() {
       const priceChanged = b.product!==product || Number(b.adults)!==adults || Number(b.kids)!==kids || !!b.pet!==pet || !!b.weekend!==weekend
         || (product==='id' && (b.idType!==idType || !!b.idWebFile!==idWebFile || !!b.idPassportAdd!==idPassportAdd || !!b.idIdCardAdd!==idIdCardAdd));
       Object.assign(b, {name,phone,email,familyNames,product,adults,kids,childName,date,time,hasKids,pet,weekend,postponedDate,snsConsent,idType,idWebFile,idPassportAdd,idIdCardAdd,dateTbd});
+      if(b.smmate) b._smEdited = true; // ★ SM 예약을 앱에서 수정 → 앞으로 SM이 덮어쓰지 않고 앱 값을 지킴 (고객번호는 항상 SM 값 고정)
       if(product==='growth') { b.contractYears=contractYears; b.contractYear=contractYear; b.cohort=cohort; }
       if(priceChanged) { delete b.priceItems; delete b.payments; }
     }
@@ -6151,9 +6186,26 @@ async function deleteBooking() {
   if(!editId) return;
   const b = bookings.find(x=>x.id===editId);
   const isManual = b && !b.smmate && !String(editId).startsWith('sm_');
-  // SM메이트에서 온 예약은 여기서 삭제 불가 (schedules가 원본 — 지워도 새로고침 때 다시 옴)
+  // ★ SM메이트 예약 삭제 — 삭제 기록(tombstone)을 남겨 새로고침해도 안 돌아오게 (기기 간 동기화)
   if(b && !isManual){
-    alert('SM메이트에서 온 예약은 여기서 삭제할 수 없어요.\nSM메이트에서 삭제하거나, "취소" 처리를 이용해 주세요.');
+    if(b.smmate_id){
+      smDeletedIds.add(b.smmate_id);
+      try { localStorage.setItem('gamtan_sm_deleted', JSON.stringify([...smDeletedIds])); } catch(e) {}
+      if(typeof supa!=='undefined' && currentUser){
+        try{
+          const { error } = await supa.from('booking_state').upsert(
+            { booking_key: 'smdel:'+b.smmate_id, state: { deleted: true }, updated_at: new Date().toISOString() },
+            { onConflict: 'booking_key' });
+          if(error){ console.error('SM 삭제 기록 실패:', error); alert('삭제 기록 저장 실패:\n'+(error.message||JSON.stringify(error))+'\n\n캡처해서 알려주세요.'); return; }
+        }catch(e){ console.error(e); alert('삭제 오류: '+(e.message||e)); return; }
+      }
+    }
+    bookings = bookings.filter(x=>x.id!==editId);
+    if(selectedId===editId) { selectedId=null; }
+    saveBookings();
+    closeAddModal();
+    clearWorkflow();
+    renderAll();
     return;
   }
   // ★ 서버(manual_bookings)에서도 삭제 — 안 하면 실시간 갱신/새로고침 때 되살아남 (삭제 안 되던 원인)
@@ -9400,7 +9452,7 @@ function closeDayDetail() {
 <div id="gc-wrap">
   <div id="gc-root">
     <div id="gc-head">
-      <b>💰 감탄 콘솔 <span id="gc-ver">v14</span></b>
+      <b>💰 감탄 콘솔 <span id="gc-ver">v15</span></b>
       <button id="gc-close" aria-label="닫기">✕</button>
     </div>
     <div id="gc-tabwrap"><div class="tabs" id="gc-tabs"></div></div>
