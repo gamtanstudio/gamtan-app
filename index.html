@@ -2235,18 +2235,10 @@ async function loadFromSupabase() {
         } catch(e) { console.error(e); }
       }
 
-      // ★ 로컬에만 있던 기존 수동예약(서버에 아직 없는 것)을 서버로 자동 이관 — 한 번 올라가면 이후엔 서버가 소스
-      const _serverIds = new Set(manualBks.map(b => b.id));
-      const _toMigrate = localOnly.filter(b => b.id && !_serverIds.has(b.id));
-      if (_toMigrate.length > 0) {
-        try {
-          const { error: migErr } = await supa.from('manual_bookings').upsert(
-            _toMigrate.map(b => ({ id: b.id, data: b, updated_at: new Date().toISOString() })),
-            { onConflict: 'id' });
-          if (!migErr) manualBks = [...manualBks, ..._toMigrate];
-          else console.error('기존 예약 이관 실패:', migErr);
-        } catch(e) { console.error('기존 예약 이관 실패:', e); }
-      }
+      // (제거됨 v14) 로컬에만 있는 수동예약을 서버로 자동 재업로드하던 로직 —
+      //  이게 '삭제한 수동예약이 다른 컴/브라우저 캐시에서 다시 살아나는' 진짜 원인이라 없앰.
+      //  이제 manual_bookings(서버)가 수동예약의 유일한 기준. 로컬은 순수 캐시로만 사용한다.
+      //  (신규 예약은 저장 즉시 서버에 올라가므로 두 컴 공유엔 영향 없음)
       // ★ SM 예약의 로컬 작업상태 전체 보존
       // 캐시(로컬에서 손댄 모든 상태: 사진선택·준비/출고 체크·가격수정·단계 등)를 베이스로 두고,
       // SM메이트에서 새로 내려오는 예약정보 필드만 최신값으로 덮어씀
@@ -9408,7 +9400,7 @@ function closeDayDetail() {
 <div id="gc-wrap">
   <div id="gc-root">
     <div id="gc-head">
-      <b>💰 감탄 콘솔 <span id="gc-ver">v13</span></b>
+      <b>💰 감탄 콘솔 <span id="gc-ver">v14</span></b>
       <button id="gc-close" aria-label="닫기">✕</button>
     </div>
     <div id="gc-tabwrap"><div class="tabs" id="gc-tabs"></div></div>
