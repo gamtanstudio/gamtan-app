@@ -2213,7 +2213,7 @@ async function loadFromSupabase() {
       }).filter(b => b.name && b.date);
 
       const localBks = JSON.parse(localStorage.getItem('gamtan_bookings')||'[]');
-      const localOnly = localBks.filter(b => !b.smmate);
+      const localOnly = localBks.filter(b => !b.smmate && !(b.name||'').includes('*'));
 
       // ★ 손으로 넣은 예약을 manual_bookings(서버)에서 불러오기 — 모든 기기 공유
       let manualBks = [];
@@ -2222,6 +2222,18 @@ async function loadFromSupabase() {
           supa.from('manual_bookings').select('id,data').range(from, to));
         manualBks = mbRows.map(r => r.data).filter(b => b && b.name && b.id);
       } catch(e) { console.error('수동예약 불러오기 실패:', e); }
+
+      // ★ 마스킹 이름(*) 수동예약 자동 정리 — 네이버 마스킹 이름이 저장된 잔재(예: 백*경) 제거.
+      //   (v12부터 저장은 차단됨. 여기선 기존 잔재를 서버에서 지우고 화면·재업로드에서도 뺌.
+      //    네이버 예약(N뱃지)은 reservations 테이블이라 여기 영향 없음 — 김*진 등 정상 표시 유지)
+      const _maskedManual = manualBks.filter(b => (b.name||'').includes('*'));
+      if (_maskedManual.length) {
+        manualBks = manualBks.filter(b => !(b.name||'').includes('*'));
+        try {
+          supa.from('manual_bookings').delete().in('id', _maskedManual.map(b => b.id))
+            .then(({error})=>{ if(error) console.error('마스킹 예약 정리 실패:', error); });
+        } catch(e) { console.error(e); }
+      }
 
       // ★ 로컬에만 있던 기존 수동예약(서버에 아직 없는 것)을 서버로 자동 이관 — 한 번 올라가면 이후엔 서버가 소스
       const _serverIds = new Set(manualBks.map(b => b.id));
@@ -9396,7 +9408,7 @@ function closeDayDetail() {
 <div id="gc-wrap">
   <div id="gc-root">
     <div id="gc-head">
-      <b>💰 감탄 콘솔 <span id="gc-ver">v12</span></b>
+      <b>💰 감탄 콘솔 <span id="gc-ver">v13</span></b>
       <button id="gc-close" aria-label="닫기">✕</button>
     </div>
     <div id="gc-tabwrap"><div class="tabs" id="gc-tabs"></div></div>
