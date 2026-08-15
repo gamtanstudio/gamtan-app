@@ -1064,7 +1064,7 @@ let userRole = 'staff';
     <div class="form-row-2">
       <div class="form-row">
         <label>날짜</label>
-        <input type="date" id="f-date">
+        <input type="date" id="f-date" onchange="onDateInputChange()">
       </div>
       <div class="form-row" style="flex-direction:column;align-items:flex-start;gap:6px">
         <label>시간</label>
@@ -4264,6 +4264,19 @@ function toggleStageFilter(stage) {
 
 let mcYear = new Date().getFullYear();
 let mcMonth = new Date().getMonth(); // 0-based
+// [신규] 5단계 진행상태 필터 — 월간 캘린더 전용, 직접등록 예약(!b.smmate)에만 적용
+let mcProgress5Filter = null;
+const PROGRESS5_CHIPS = [
+  {key:'monitor',    label:'모니터',        color:'#d97706'},
+  {key:'working',    label:'작업중(보정중)', color:'#0891b2'},
+  {key:'precontact', label:'출고연락전',    color:'#ea580c'},
+  {key:'contacted',  label:'출고연락완료',  color:'#0e7490'},
+  {key:'done',       label:'완료',          color:'#15803d'},
+];
+function toggleMcProgress5Filter(key) {
+  mcProgress5Filter = (mcProgress5Filter === key) ? null : key;
+  renderMonthCal();
+}
 
 // ====================== 뒤로/앞으로 가기 ======================
 let _historyPushing = false; // popstate 처리 중 중복 push 방지
@@ -4615,7 +4628,7 @@ function toggleWork(bid, key, field) {
   }
   refreshHistCardHeader(bid);
 }
-function getDynamicStatusLabel(b) {
+function getDynamicStatusLabelLegacy(b) {
   if(b.cancelled) return {label:'취소', color:'#9ca3af'};
   if(b.postponed)  return {label:'연기', color:'#f97316'};
   const stage = b.currentStage||0;
@@ -4652,7 +4665,7 @@ function getDynamicStatusLabel(b) {
 }
 
 // 보정 상태 배지: 보정중 / 보정완료 / 출고준비 완료 / null
-function getProgressBadge(b) {
+function getProgressBadgeLegacy(b) {
   const stage = b.currentStage||0;
   const isId = b.product==='id';
   const isAllDone = isId ? stage >= 2 : stage >= 8;
@@ -4664,6 +4677,28 @@ function getProgressBadge(b) {
   if(b.stageChecks?.[5]?.[3]) // 보정 작업 시작 체크됨 → 보정중
     return `<span style="font-size:10px;background:#fef3c7;color:#b45309;border:1px solid #fcd34d;border-radius:6px;padding:1px 7px;font-weight:700;white-space:nowrap;flex-shrink:0">✏️ 보정중</span>`;
   return null;
+}
+
+// ══════════════════════════════════════════════════════════════
+// [화면 연결] 직접등록 예약(!b.smmate)만 5단계 규칙, SM 예약은 기존 로직 그대로 — 함수 내부에서만 분기.
+// 기존 호출부(getDynamicStatusLabel 10곳, getProgressBadge 2곳)는 전혀 안 건드림.
+// computeProgress5/hasCalculatedAmount는 이 파일 아래쪽(구 isUnpaid 다음)에 정의돼 있음(함수 선언은 호이스팅되어 순서 무관).
+// ══════════════════════════════════════════════════════════════
+const PROGRESS5_COLOR = {
+  monitor:'#d97706', working:'#0891b2', precontact:'#ea580c', contacted:'#0e7490',
+  done:'#15803d', exception:'#dc2626', upcoming:'#9ca3af', excluded:'#64748b',
+};
+function getDynamicStatusLabel5(b) {
+  const p = computeProgress5(b);
+  return { label: p.label, color: PROGRESS5_COLOR[p.key] || '#888' };
+}
+function getDynamicStatusLabel(b) {
+  return b.smmate ? getDynamicStatusLabelLegacy(b) : getDynamicStatusLabel5(b);
+}
+function getProgressBadge(b) {
+  // 새 5단계 라벨이 이미 보정중/보정완료 정보를 포함하므로, 직접등록 예약은 옛 보조배지를 숨김(중복·불일치 방지)
+  if (!b.smmate) return null;
+  return getProgressBadgeLegacy(b);
 }
 
 // 미입금 여부: 증명사진·완료·취소·연기 제외, 예약금 실제 입금액이 0인 경우
@@ -4681,6 +4716,81 @@ function isUnpaid(b) {
   return (depositAmt + midAmt) === 0;
 }
 const UNPAID_BADGE = `<span style="font-size:10px;background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:6px;padding:1px 7px;font-weight:700;white-space:nowrap;flex-shrink:0">미입금</span>`;
+
+// ══════════════════════════════════════════════════════════════
+// [검증 전용 · 신규구조] 진행상태 5단계 — progress_preview.html에서 검증된 규칙을 그대로 이식.
+// 기존 getDynamicStatusLabel/getProgressBadge와 완전히 별개로 동작. 화면 어디에도 아직 연결 안 함.
+// 브라우저 콘솔에서 verifyProgress5() 호출해서 확인 (읽기 전용, 화면·저장 영향 전혀 없음).
+// ══════════════════════════════════════════════════════════════
+function hasCalculatedAmount(b) {
+  if (b.priceItems && b.priceItems.length) {
+    const sum = b.priceItems.reduce((s,r)=>s+Number(r.amt||0),0);
+    if (sum > 0) return true;
+  }
+  if (b.payments && Number(b.payments.total) > 0) return true;
+  const paid = Number(b.payments?.deposit?.amt||0) + (b.payments?.midterms||[]).reduce((s,r)=>s+Number(r.amt||0),0);
+  return paid > 0;
+}
+function computeProgress5(b) {
+  if (b.cancelled)  return { key:'exception', label:'취소' };
+  if (b.postponed)  return { key:'exception', label:'연기' };
+
+  // 증명사진: 5단계(모니터~완료) 안 타고, 액자·보정·출고 과정이 없어 금액계산만으로 바로 완료 판정
+  if (b.product === 'id') {
+    if (hasCalculatedAmount(b)) return { key:'done', label:'완료' };
+    if (isUnpaid(b)) return { key:'exception', label:'미입금' };
+    return { key:'upcoming', label:'접수' };
+  }
+
+  // 미입금: 예약금조차 한 푼도 안 들어온 경우만(isUnpaid). 예약금만 내고 잔금이 남아도 미입금 아님.
+  if (isUnpaid(b))  return { key:'exception', label:'미입금' };
+
+  const amtDone = hasCalculatedAmount(b);
+  const ps = !!b.photoSelected;
+  // 완납(총액 다 들어옴) 여부 — 모니터는 완납됐을 때만. 예약금만 내고 잔금 남은 중간 상태는 미입금도 모니터도 아닌 접수 상태로 유지.
+  const totalDue = priceTotal(b) || Number(b.payments?.total||0);
+  const fullyPaid = totalDue > 0 && paidTotal(b) >= totalDue;
+
+  if (!amtDone && !ps) return { key:'upcoming', label:'예정(금액 미확정)', amtDone, ps };
+  if (!fullyPaid)      return { key:'upcoming', label:'접수(잔금 남음)', amtDone, ps };
+  if (!ps) return { key:'monitor', label:'모니터', amtDone, ps };
+
+  const items = getWorkItems(b);
+  const hasItems = items.length > 0;
+  const allReady   = hasItems && items.every(k => wReady(b, k));
+  const allShipped = hasItems && items.every(k => wShipped(b, k));
+  const pc = !!b.pickupContacted;
+
+  let key, label;
+  if (allShipped && pc)      { key='done';       label='완료'; }
+  else if (pc)                { key='contacted';  label='출고연락완료'; }
+  else if (allReady)          { key='precontact'; label='출고연락전'; }
+  else                         { key='working';    label='작업중(보정중)'; }
+
+  return { key, label, items, allReady, allShipped, pc, hasItems, amtDone, ps };
+}
+// 콘솔 검증용. 앱에서 직접 등록한 예약(!b.smmate)만 대상 —
+// progress_preview.html의 "앱에서 만든 예약" 탭 결과와 1:1 비교하는 용도.
+window.verifyProgress5 = function() {
+  const manualBks = bookings.filter(b => !b.smmate);
+  const rows = manualBks.map(b => {
+    const p = computeProgress5(b);
+    return {
+      name: b.name, customer_no: b.customer_no ?? '(없음)',
+      date: b.date, time: b.time, product: b.product,
+      progress: p.label, key: p.key,
+      금액계산됨: p.amtDone ?? hasCalculatedAmount(b),
+      사진선택: !!b.photoSelected,
+      출고연락: !!b.pickupContacted,
+    };
+  });
+  console.table(rows);
+  const counts = {};
+  rows.forEach(r => { counts[r.key] = (counts[r.key]||0) + 1; });
+  console.log('진행상태별 건수:', counts);
+  console.log(`총 ${rows.length}건 (직접등록만, SM 제외)`);
+  return rows;
+};
 
 function matchesQuery(b, query) {
   if(!query) return true;
@@ -5741,8 +5851,14 @@ function onDateTbdChange() {
   const tbd = document.getElementById('f-date-tbd')?.checked;
   const dateInput = document.getElementById('f-date');
   if(!dateInput) return;
-  dateInput.disabled = !!tbd;
-  if(tbd) dateInput.value = '';
+  dateInput.disabled = false;       // 날짜칸을 잠그지 않음 — 언제든 날짜 입력 가능
+  if(tbd) dateInput.value = '';      // '미정' 체크하면 날짜만 비움
+}
+// 날짜를 고르면 '날짜 미정'을 자동 해제 (미정인 채 남아 날짜가 안 먹던 문제 해결)
+function onDateInputChange() {
+  const dateInput = document.getElementById('f-date');
+  const tbdCb = document.getElementById('f-date-tbd');
+  if(dateInput && dateInput.value && tbdCb && tbdCb.checked) tbdCb.checked = false;
 }
 
 function onKidsToggle() {
@@ -6362,6 +6478,8 @@ function renderMonthCal() {
   const byDate = {};
   bookings.forEach(b => {
     if(b.dateTbd) return; // 날짜 미정은 캘린더에 표시 안 함
+    // [신규] 5단계 필터 활성 시 — 직접등록 예약 중 해당 상태인 것만 표시
+    if(mcProgress5Filter && (b.smmate || computeProgress5(b).key !== mcProgress5Filter)) return;
     const isPostponed = !!b.postponed && !b.cancelled;
     if(!byDate[b.date]) byDate[b.date] = [];
     byDate[b.date].push({...b, _mcType: b.cancelled ? 'cancelled' : isPostponed ? 'postponed_orig' : 'normal'});
@@ -6371,8 +6489,9 @@ function renderMonthCal() {
     }
   });
 
-  // ★ 네이버 예약을 같은 날짜 버킷에 병합 (use_at → 한국 로컬 날짜/시간)
+  // ★ 네이버 예약을 같은 날짜 버킷에 병합 (use_at → 한국 로컬 날짜/시간) — 5단계 필터 중엔 숨김(직접등록만 보는 모드라서)
   naverReservations.forEach(r => {
+    if(mcProgress5Filter) return;
     if(!r.use_at) return;
     const dt = new Date(r.use_at);
     if(isNaN(dt.getTime())) return;
@@ -6565,6 +6684,16 @@ function renderMonthCal() {
     </div>`;
   }).join('');
 
+  // [신규] 5단계 필터 칩 — 직접등록 예약(!b.smmate) 대상, 전체 기간 기준 건수
+  const p5Counts = {};
+  PROGRESS5_CHIPS.forEach(c=>p5Counts[c.key]=0);
+  bookings.forEach(b=>{ if(b.smmate) return; const k=computeProgress5(b).key; if(p5Counts[k]!=null) p5Counts[k]++; });
+  const progress5ChipsHtml = PROGRESS5_CHIPS.map(c=>{
+    const active = mcProgress5Filter===c.key;
+    return `<button class="sf-btn${active?' active':''}" style="${active?`background:${c.color};border-color:${c.color};color:#fff`:''}"
+      onclick="toggleMcProgress5Filter('${c.key}')">${c.label}<span class="sf-cnt">${p5Counts[c.key]}</span></button>`;
+  }).join('');
+
   mc.innerHTML = `
     <div class="mc-nav">
       <button class="mc-nav-btn" onclick="mcPrevMonth()">‹</button>
@@ -6574,6 +6703,11 @@ function renderMonthCal() {
       <div style="flex:1"></div>
       <button onclick="openCustSearchPopup()" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-weight:600;white-space:nowrap">👤 검색</button>
       <button onclick="openAddModal()" style="background:#6366f1;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-weight:700;white-space:nowrap">＋ 추가</button>
+    </div>
+    <div id="mc-progress5-bar" style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:6px 14px;background:#fff;border-bottom:1px solid #e5e7eb">
+      <span style="font-size:11px;color:#999;font-weight:700;margin-right:2px;white-space:nowrap">직접등록 진행상태</span>
+      ${progress5ChipsHtml}
+      ${mcProgress5Filter?`<button class="sf-btn" onclick="toggleMcProgress5Filter('${mcProgress5Filter}')" style="color:#dc2626;border-color:#fca5a5">✕ 필터 해제</button>`:''}
     </div>
     <div class="mc-grid-wrap">
       <div class="mc-grid">
@@ -7458,19 +7592,24 @@ async function showCustDetail(name) {
     const isPostponed = !!b.postponed;
     const isDateTbd   = !!b.dateTbd;
 
-    // 가족성장 계약 정보
+    // 가족성장 계약 정보 (표시 + 모집 회차 지정 — 예약 추가·계약 수정 버튼은 제거됨)
     const isGrowth = b.product==='growth';
-    const contractInfoHtml = isGrowth && b.contractYear ? (()=>{
+    const contractInfoHtml = isGrowth ? (()=>{
       const totalYrs = b.contractYears||5;
       const curYr    = b.contractYear||1;
-      // 같은 계약의 다음 연도 예약이 이미 있는지 확인
-      const hasNextYear = b.contractId && bookings.some(x=>x.contractId===b.contractId && (x.contractYear||1)===curYr+1 && !x.cancelled);
-      const canAddNext  = !hasNextYear;
+      const preview  = `${b.cohort||'?'}-${b.contractYear||'?'}`;
       return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid #f5f5f5">
-        <span style="background:#be185d;color:#fff;border-radius:6px;padding:2px 9px;font-size:12px;font-weight:700">🌱 ${b.cohort?b.cohort+'-'+curYr+'회차':curYr+'년차'}</span>
-        ${canAddNext?`<button onclick="addNextYearBooking('${b.id}','${safeName}')" style="background:#db2777;color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer;font-weight:600">➕ ${curYr+1}년차 예약 추가</button>`:''}
-        ${curYr>=totalYrs?`<span style="font-size:11px;color:#059669;font-weight:700">🎉 계약 완료!</span>`:''}
-        <button onclick="openChangeContractYears('${b.id}','${safeName}')" style="background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer">계약 수정</button>
+        <label style="font-size:11px;color:#374151;font-weight:600">모집 회차</label>
+        <input type="number" min="1" value="${b.cohort||''}" placeholder="?"
+          onchange="setGrowthCohort('${b.id}','${safeName}',this.value)"
+          style="width:48px;border:1px solid #f9a8d4;border-radius:6px;padding:3px 6px;font-size:12px">
+        <span style="font-size:12px;color:#9d174d;font-weight:800">-</span>
+        <label style="font-size:11px;color:#374151;font-weight:600">년차</label>
+        <input type="number" min="1" value="${b.contractYear||''}" placeholder="?"
+          onchange="setGrowthYear('${b.id}','${safeName}',this.value)"
+          style="width:48px;border:1px solid #f9a8d4;border-radius:6px;padding:3px 6px;font-size:12px">
+        <span style="font-size:11px;color:#9d174d;font-weight:600">→ ${preview}</span>
+        ${b.contractYear && curYr>=totalYrs?`<span style="font-size:11px;color:#059669;font-weight:700;margin-left:auto">🎉 계약 완료!</span>`:''}
       </div>`;
     })() : '';
 
@@ -7633,6 +7772,7 @@ async function showCustDetail(name) {
           <span style="font-size:15px;font-weight:800;color:${isCancelled?'#9ca3af':isPostponed?'#c2410c':isDateTbd?'#be185d':isAllDone?'#166534':'#1a1a2e'};white-space:nowrap;${(isCancelled||isPostponed)?'text-decoration:line-through;':''}">${isDateTbd?'날짜 미정':fmtDateKo(b.date)+' '+fmtTime(b.time)}</span>
           ${isPostponed && b.postponedDate ? `<span style="font-size:13px;font-weight:800;color:#c2410c;white-space:nowrap">→ ${fmtDateKo(b.postponedDate)}</span>` : ''}
           <span style="font-size:12px;background:${p.color};color:#fff;border-radius:6px;padding:2px 9px;white-space:nowrap">${p.name}</span>
+          ${b.product==='growth'&&b.contractYear?`<span style="font-size:12px;background:#be185d;color:#fff;border-radius:6px;padding:2px 8px;white-space:nowrap;font-weight:700">${b.cohort?b.cohort+'-'+b.contractYear:b.contractYear+'년차'}</span>`:''}
           ${t>0?`<span style="font-size:12px;background:#dbeafe;color:#1d4ed8;border-radius:6px;padding:2px 7px;white-space:nowrap">👥${t}명</span>`:''}
           <span style="font-size:12px;font-weight:700;color:${stColor};white-space:nowrap">${stLabel}</span>
           ${b.snsConsent ? `<span style="font-size:12px;background:#fef2f2;color:#dc2626;border:1.5px solid #fca5a5;border-radius:6px;padding:2px 8px;font-weight:700;white-space:nowrap">🩷 SNS</span>` : ''}
@@ -8039,71 +8179,28 @@ function unpostponeBooking(bid, custName) {
 }
 
 // ─── 가족성장 계약 함수들 ──────────────────────────────────────────
-// 다음 연도 예약 추가
-function addNextYearBooking(bid, custName) {
+// 모집 회차 지정 (같은 계약 전체 연차 예약에 함께 적용)
+function setGrowthCohort(bid, custName, val) {
   const b = bookings.find(x=>x.id===bid);
   if(!b) return;
-  const curYr = b.contractYear||1;
-  let totalYrs = b.contractYears||5;
-  const nextYr = curYr + 1;
-  // 이미 다음 연도 예약이 있는지 체크
-  const exists = b.contractId && bookings.some(x=>x.contractId===b.contractId && (x.contractYear||1)===nextYr && !x.cancelled);
-  if(exists) { alert(`${nextYr}년차 예약이 이미 있습니다.`); return; }
-  // 계약 기간을 넘어서면 확인 후 연장 (예: 3년 계약을 6-4·6-5로 계속)
-  if(nextYr > totalYrs) {
-    if(!confirm(`계약 ${totalYrs}년을 넘어 ${nextYr}년차를 추가합니다.\n계약 기간을 ${nextYr}년으로 늘릴까요?`)) return;
-    totalYrs = nextYr;
-    if(b.contractId) bookings.forEach(x=>{ if(x.contractId===b.contractId) x.contractYears = totalYrs; });
-    else b.contractYears = totalYrs;
+  const parsed = parseInt(val);
+  const cohort = (val==='' || isNaN(parsed) || parsed<1) ? null : parsed;
+  if(b.contractId) {
+    bookings.forEach(x=>{ if(x.contractId===b.contractId) x.cohort = cohort; });
+  } else {
+    b.cohort = cohort;
   }
-  const newId = Date.now().toString();
-  const newBooking = {
-    id: newId,
-    name: b.name,
-    phone: b.phone,
-    email: b.email||'',
-    product: 'growth',
-    date: '',
-    time: b.time||'',
-    memo: '',
-    currentStage: 0,
-    stageChecks: {},
-    priceItems: JSON.parse(JSON.stringify(b.priceItems||[])),
-    extraCharges: [],
-    extraItems: {},
-    dateTbd: true,
-    contractYears: totalYrs,
-    contractYear: nextYr,
-    cohort: b.cohort,
-    contractId: b.contractId,
-    familyNames: b.familyNames||'',
-    createdAt: new Date().toLocaleDateString('ko-KR')
-  };
-  bookings.push(newBooking);
   saveBookings();
-  addCustLog(custName, `가족성장 ${b.cohort?b.cohort+'-'+nextYr+'회차':nextYr+'년차'} 예약 추가 (날짜 미정)`);
   showCustDetail(custName);
-  alert(`${nextYr}년차 예약이 추가되었습니다.\n날짜는 확정 후 수정해 주세요.`);
 }
 
-// 계약 기간 변경 (5년 ↔ 10년)
-function openChangeContractYears(bid, custName) {
+// 년차 지정 (이 예약 레코드에만 적용 — 같은 계약이라도 연차는 예약마다 다름)
+function setGrowthYear(bid, custName, val) {
   const b = bookings.find(x=>x.id===bid);
   if(!b) return;
-  const cur = b.contractYears||5;
-  const newVal = prompt(`계약 기간을 입력해주세요.\n현재: ${cur}년\n(예: 5 또는 10)`, cur);
-  if(!newVal) return;
-  const parsed = parseInt(newVal);
-  if(isNaN(parsed)||parsed<1||parsed>20) { alert('1~20 사이의 숫자를 입력해주세요.'); return; }
-  if(parsed===cur) return;
-  // 같은 contractId를 가진 모든 예약의 contractYears 업데이트
-  if(b.contractId) {
-    bookings.forEach(x=>{ if(x.contractId===b.contractId) x.contractYears = parsed; });
-  } else {
-    b.contractYears = parsed;
-  }
+  const parsed = parseInt(val);
+  b.contractYear = (val==='' || isNaN(parsed) || parsed<1) ? null : parsed;
   saveBookings();
-  addCustLog(custName, `가족성장 계약 기간 변경: ${cur}년 → ${parsed}년`);
   showCustDetail(custName);
 }
 
@@ -9399,7 +9496,7 @@ function closeDayDetail() {
 <div id="gc-wrap">
   <div id="gc-root">
     <div id="gc-head">
-      <b>💰 감탄 콘솔 <span id="gc-ver">v16</span></b>
+      <b>💰 감탄 콘솔 <span id="gc-ver">v17</span></b>
       <button id="gc-close" aria-label="닫기">✕</button>
     </div>
     <div id="gc-tabwrap"><div class="tabs" id="gc-tabs"></div></div>
