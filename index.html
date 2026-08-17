@@ -4660,13 +4660,12 @@ function getDynamicStatusLabelLegacy(b) {
     return getDynamicStatusLabel5(b);
   }
 
-  // 증명사진: 기존 로직 그대로 (5단계 안 탐)
-  if(stage >= 2) return {label:'완료', color:'#15803d'};
-  if(isUnpaid(b)) return {label:'미입금', color:'#dc2626'};
-  const amt = b.priceItems ? priceTotal(b) : 0;
-  const paid = b.payments ? paidTotal(b) : 0;
+  // 증명사진: 5단계 안 탐, 액자·보정·출고 과정도 없어서 금액 하나로만 판정.
+  // stage>=2 완료 숏컷 금지(돈 안 들어와도 완료로 뜨던 버그) — 완납이면 완료, 아니면 무배지.
+  const amt = priceTotal(b) || Number(b.payments?.total||0);
+  const paid = paidTotal(b);
   if(amt > 0 && paid >= amt) return {label:'완료', color:'#15803d'};
-  return {label: ID_STAGE_NAMES[stage]||'예약 접수', color:'#6366f1'};
+  return {label:'', color:'#6366f1'};
 }
 
 // 보정 상태 배지: 보정중 / 보정완료 / 출고준비 완료 / null
@@ -4740,11 +4739,14 @@ function computeProgress5(b) {
   if (b.cancelled)  return { key:'exception', label:'취소' };
   if (b.postponed)  return { key:'exception', label:'연기' };
 
-  // 증명사진: 5단계(모니터~완료) 안 타고, 액자·보정·출고 과정이 없어 금액계산만으로 바로 완료 판정
+  // 증명사진: 5단계(모니터~완료) 안 타고, 액자·보정·출고 과정이 없어 결제 여부 하나로만 판정.
+  // hasCalculatedAmount(금액이 '설정'됐는지)로 완료 처리하던 게 버그 — 설정과 결제는 다름.
+  // 완납이면 완료, 아니면(미납 포함 전부) 무배지.
   if (b.product === 'id') {
-    if (hasCalculatedAmount(b)) return { key:'done', label:'완료' };
-    if (isUnpaid(b)) return { key:'exception', label:'미입금' };
-    return { key:'upcoming', label:'접수' };
+    const amt = priceTotal(b) || Number(b.payments?.total||0);
+    const paid = paidTotal(b);
+    if (amt > 0 && paid >= amt) return { key:'done', label:'완료' };
+    return { key:'upcoming', label:'' };
   }
 
   // 미입금: 예약금조차 한 푼도 안 들어온 경우만(isUnpaid). 예약금만 내고 잔금이 남아도 미입금 아님.
@@ -4757,7 +4759,9 @@ function computeProgress5(b) {
   const fullyPaid = totalDue > 0 && paidTotal(b) >= totalDue;
 
   if (!amtDone && !ps) return { key:'upcoming', label:'예정(금액 미확정)', amtDone, ps };
-  if (!fullyPaid)      return { key:'upcoming', label:'접수(잔금 남음)', amtDone, ps };
+  // 예약금은 들어왔지만 잔금이 남은 상태 — 배지 없이(무배지) '진행 중'으로 자연스럽게 읽히게 둔다.
+  // (렌더 쪽 hideLabel/빈 라벨 가드가 label:''을 이미 배지 미표시로 처리함 — 아래 참고)
+  if (!fullyPaid)      return { key:'upcoming', label:'', amtDone, ps };
   if (!ps) return { key:'monitor', label:'모니터', amtDone, ps };
 
   const items = getWorkItems(b);
