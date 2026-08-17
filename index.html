@@ -2953,9 +2953,9 @@ function updatePriceUI(bid) {
   if(rc) rc.style.background = noAmt ? '#f9fafb' : isPaid ? '#f0fdf4' : '#fff1f2';
   // 한줄 요약 카드 갱신
   const depShowEl = document.getElementById(`pt-dep-show-${bid}`);
-  if(depShowEl) depShowEl.textContent = fmtPrice(d);
+  if(depShowEl) depShowEl.textContent = fmtPrice(Number(b.payments?.deposit?.amt||0));
   const midShowEl = document.getElementById(`pt-mid-show-${bid}`);
-  if(midShowEl) midShowEl.textContent = fmtPrice(m);
+  if(midShowEl) midShowEl.textContent = fmtPrice(mid);
   // 예약금 입금확인 체크박스 동기화
   const confirmed = !!b.stageChecks?.[1]?.[0];
   const row = document.getElementById(`dep-confirm-row-${bid}`);
@@ -2972,11 +2972,17 @@ function updatePriceUI(bid) {
     lbl.textContent = confirmed ? '✅ 예약금 입금 확인됨' : '⚠️ 예약금 미입금 — 클릭하여 확인';
   }
 }
+let _priceUiDebounceTimer = null;
 function editPriceAmt(bid, itemId, val) {
   const b = bookings.find(x=>x.id===bid);
   if(!b) return;
   const item = b.priceItems.find(r=>r.id===itemId);
-  if(item) { item.amt = parseInt(val.replace(/[^0-9-]/g,''))||0; saveBookings(); updatePriceUI(bid); }
+  if(!item) return;
+  item.amt = parseInt(val.replace(/[^0-9-]/g,''))||0;
+  saveBookings();
+  // 총액·잔금 요약은 타이핑마다 즉시 갱신하지 않고 debounce — 입력칸 자체는 안 건드리니 포커스엔 영향 없지만, 불필요한 DOM 갱신을 줄임
+  clearTimeout(_priceUiDebounceTimer);
+  _priceUiDebounceTimer = setTimeout(()=>updatePriceUI(bid), 300);
 }
 function editPriceMethod(bid, itemId, val) {
   const b = bookings.find(x=>x.id===bid);
@@ -3128,7 +3134,7 @@ function priceRowHtml(bid, r) {
         style="border:1px solid #e0e0e0;border-radius:5px;padding:4px 7px;font-size:12px;width:100%;font-family:inherit">
     </td>
     <td style="padding:3px 0 3px 5px;width:40%">
-      <input type="text" value="${Number(r.amt).toLocaleString('ko-KR')}" oninput="editPriceAmt('${bid}',${r.id},this.value)"
+      <input type="text" value="${Number(r.amt).toLocaleString('ko-KR')}" oninput="editPriceAmt('${bid}',${r.id},this.value)" onblur="updatePriceUI('${bid}')"
         style="border:1px solid #e0e0e0;border-radius:5px;padding:4px 7px;font-size:12px;width:100%;text-align:right;font-family:inherit">
     </td>
     <td style="padding:3px 0 3px 2px;width:10%;text-align:center">
