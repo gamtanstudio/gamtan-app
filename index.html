@@ -4274,12 +4274,21 @@ let mcMonth = new Date().getMonth(); // 0-based
 // [신규] 5단계 진행상태 필터 — 월간 캘린더 전용, 직접등록 예약(!b.smmate)에만 적용
 let mcProgress5Filter = null;
 const PROGRESS5_CHIPS = [
+  {key:'unpaid',     label:'미입금',        color:'#dc2626'},
   {key:'monitor',    label:'모니터',        color:'#d97706'},
   {key:'working',    label:'작업중(보정중)', color:'#0891b2'},
   {key:'precontact', label:'출고연락전',    color:'#ea580c'},
   {key:'contacted',  label:'출고연락완료',  color:'#0e7490'},
   {key:'done',       label:'완료',          color:'#15803d'},
 ];
+// computeProgress5는 취소/연기/미입금을 전부 key:'exception'으로 묶어서 반환하는데,
+// 필터바에선 미입금만 따로 골라내야 해서(취소·연기는 필터에 없음 — 기존 그대로 미표시),
+// 미입금일 때만 'unpaid'로 바꿔치기해 반환하는 얇은 래퍼. computeProgress5 자체는 안 건드림.
+function progress5FilterKey(b) {
+  const p = computeProgress5(b);
+  if (p.key === 'exception' && p.label === '미입금') return 'unpaid';
+  return p.key;
+}
 function toggleMcProgress5Filter(key) {
   mcProgress5Filter = (mcProgress5Filter === key) ? null : key;
   renderMonthCal();
@@ -6519,7 +6528,7 @@ function renderMonthCal() {
   bookings.forEach(b => {
     if(b.dateTbd) return; // 날짜 미정은 캘린더에 표시 안 함
     // [신규] 5단계 필터 활성 시 — 직접등록 예약 중 해당 상태인 것만 표시
-    if(mcProgress5Filter && (b.smmate || computeProgress5(b).key !== mcProgress5Filter)) return;
+    if(mcProgress5Filter && (b.smmate || progress5FilterKey(b) !== mcProgress5Filter)) return;
     const isPostponed = !!b.postponed && !b.cancelled;
     if(!byDate[b.date]) byDate[b.date] = [];
     byDate[b.date].push({...b, _mcType: b.cancelled ? 'cancelled' : isPostponed ? 'postponed_orig' : 'normal'});
@@ -6728,7 +6737,7 @@ function renderMonthCal() {
   // [신규] 5단계 필터 칩 — 직접등록 예약(!b.smmate) 대상, 전체 기간 기준 건수
   const p5Counts = {};
   PROGRESS5_CHIPS.forEach(c=>p5Counts[c.key]=0);
-  bookings.forEach(b=>{ if(b.smmate) return; const k=computeProgress5(b).key; if(p5Counts[k]!=null) p5Counts[k]++; });
+  bookings.forEach(b=>{ if(b.smmate) return; const k=progress5FilterKey(b); if(p5Counts[k]!=null) p5Counts[k]++; });
   const progress5ChipsHtml = PROGRESS5_CHIPS.map(c=>{
     const active = mcProgress5Filter===c.key;
     return `<button class="sf-btn${active?' active':''}" style="${active?`background:${c.color};border-color:${c.color};color:#fff`:''}"
