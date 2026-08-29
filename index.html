@@ -1864,26 +1864,47 @@ function findCustByReferrerStr(refStr) {
   return dname; // fallback
 }
 
-// 추천인 드롭다운
+// 추천인 표시용 상품 짧은 이름 (캘린더 카드에서 쓰는 MC_PROD와 동일한 축약)
+const REF_PROD_SHORT = {story:'스토리',simpfam:'심플패밀리',bigfam:'대가족',growth:'성장',kids:'키즈',profile:'프로필',jangsu:'장수',id:'증명'};
+// 추천인 드롭다운 — 동명이인 구분을 위해 전화번호 뒷자리·고객번호·최근 방문일+상품을 같이 보여줌.
+// 그룹핑 키를 이름만이 아니라 이름+전화번호(없으면 고객번호)로 잡아서, 같은 이름이라도
+// 전화번호/고객번호가 다르면 서로 다른 사람으로 보고 별도 줄로 보여준다(둘 다 없는 경우에만 이름으로만 합쳐짐).
 function showReferrerDrop(safeName, q) {
   const drop = document.getElementById('ref-drop-'+safeName);
   if(!drop) return;
   const custMap = {};
-  bookings.forEach(b=>{ if(!custMap[b.name]) custMap[b.name]={name:b.name,phone:b.phone||''}; });
+  bookings.forEach(b=>{
+    if(!b.name) return;
+    const distinguisher = b.phone ? b.phone.replace(/[^0-9]/g,'') : (b.customer_no ? 'no:'+b.customer_no : '');
+    const key = b.name + '|' + distinguisher;
+    if(!custMap[key]) custMap[key] = {name:b.name, phone:'', customer_no:'', latestDate:'', latestProduct:''};
+    const c = custMap[key];
+    if(!c.phone && b.phone) c.phone = b.phone;
+    // SM 예약은 레코드 자체에 정확한 customer_no가 실려있음(이름 기준 캐시보다 신뢰도 높음) — 있으면 우선 사용
+    if(!c.customer_no && b.customer_no) c.customer_no = b.customer_no;
+    if(b.date && (!c.latestDate || b.date > c.latestDate)) { c.latestDate = b.date; c.latestProduct = b.product; }
+  });
   let custs = Object.values(custMap).filter(c=> c.name !== safeName);
   if(q) custs = custs.filter(c=> c.name.includes(q) || (c.phone||'').includes(q));
   if(!custs.length) { drop.style.display='none'; return; }
-  // 동명이인 있으면 전화번호 표시
+  // 동명이인 있으면 저장값에 전화번호를 같이 담아 findCustByReferrerStr가 나중에 구분할 수 있게 함(기존 로직 그대로)
   const nameCount = {};
   custs.forEach(c=>{ nameCount[c.name]=(nameCount[c.name]||0)+1; });
   drop.innerHTML = custs.slice(0,10).map(c=>{
     const hasDup = nameCount[c.name] > 1;
-    const label = hasDup && c.phone ? `${c.name} (${c.phone})` : c.name;
     const storeVal = hasDup && c.phone ? `${c.name} (${c.phone})` : c.name;
+    const custNo = c.customer_no || getCustNo(c.name);
+    const custNoOk = custNo && custNo !== '·····' && custNo !== '(없음)';
+    let visitTag = '';
+    if(c.latestDate) {
+      const d = new Date(c.latestDate);
+      if(!isNaN(d.getTime())) visitTag = `${d.getMonth()+1}/${d.getDate()}${REF_PROD_SHORT[c.latestProduct]?' '+REF_PROD_SHORT[c.latestProduct]:''}`;
+    }
+    const bits = [c.phone, custNoOk ? `#${custNo}` : '', visitTag].filter(Boolean).join(' · ');
     return `<div onclick="selectReferrer('${safeName}','${storeVal.replace(/'/g,"\\'")}');hideReferrerDrop('${safeName}')"
       style="padding:7px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid #f0f0f0"
       onmouseover="this.style.background='#f0f0ff'" onmouseout="this.style.background=''">
-      <b>${escHtml(dispName(c.name))}</b>${hasDup && c.phone ? `<span style="color:#888;margin-left:5px">${c.phone}</span>` : ''}
+      <b>${escHtml(dispName(c.name))}</b>${bits ? `<span style="color:#888;margin-left:5px;font-size:11px">${escHtml(bits)}</span>` : ''}
     </div>`;
   }).join('');
   drop.style.display = 'block';
@@ -3224,8 +3245,16 @@ function smmatePriceOverride(bid) {
     midterms: smMids
   };
   saveBookings();
-  // 고객 상세 전체 리렌더
-  if(b.name) showCustDetail(b.name);
+  // smmate_id 스코프 모달(#sm-booking-modal)이 지금 이 예약(bid)을 보여주고 있는 중이면 그 카드만 다시 그림 —
+  // showCustDetail(이름 병합 화면)로 가면 동명이인 통계·메모가 다시 합쳐져 보이므로 여기선 절대 호출 안 함.
+  const modal = document.getElementById('sm-booking-modal');
+  const modalOpenForThis = modal && modal.style.display !== 'none' && modal.dataset.bid === String(bid);
+  if(modalOpenForThis) {
+    renderSmBookingModalCard(bid);
+  } else if(b.name) {
+    // 이름 화면(showCustDetail)에서 호출된 경우엔 기존대로 전체 리렌더
+    showCustDetail(b.name);
+  }
 }
 function addMidterm(bid) {
   const b = bookings.find(x=>x.id===bid);
@@ -3862,7 +3891,8 @@ function closeCustSearchPopup() {
   document.getElementById('cust-search-popup').style.display = 'none';
 }
 // 팝업에서 고객 선택 → 고객 히스토리 카드로 이동 (안전한 단일 함수)
-function selectCustFromPopup(name) {
+// smId: 동명이인(SM smmate_id 2개 이상)이라 특정 인물로 골라서 연 경우에만 넘어옴. 'direct'면 매칭 안 된 직접등록건.
+function selectCustFromPopup(name, smId) {
   closeCustSearchPopup();
   // 뷰 전환
   currentView = 'cust';
@@ -3872,7 +3902,10 @@ function selectCustFromPopup(name) {
   try { renderList(); } catch(e) { console.warn('renderList error:', e); }
   // 오른쪽 히스토리 카드 렌더링
   setTimeout(()=>{
-    try { showCustDetail(name); } catch(e) { console.warn('showCustDetail error:', e); }
+    try {
+      if (smId && smId !== 'direct') showCustDetailBySmId(name, smId);
+      else showCustDetail(name);
+    } catch(e) { console.warn('showCustDetail error:', e); }
   }, 50);
 }
 // 신규 고객 등록 폼 렌더링 공통 함수
@@ -3922,14 +3955,32 @@ function renderCustSearchPopup() {
   const q = (document.getElementById('cust-popup-input')?.value||'').trim();
   const qLow = q.toLowerCase();
 
-  const custMap = {};
-  bookings.forEach(b=>{
-    if(!custMap[b.name]) custMap[b.name] = {name:b.name, phone:b.phone||'', lastDate:'', count:0};
-    if(!b._phonePlaceholder) custMap[b.name].count++;
-    if(!b.cancelled && !b._phonePlaceholder && b.date > (custMap[b.name].lastDate||'')) custMap[b.name].lastDate = b.date;
-    if(b.phone && !custMap[b.name].phone) custMap[b.name].phone = b.phone;
+  // 이름별로 모으되, smmate_id가 2개 이상(동명이인)이면 smmate_id별 별도 항목으로 쪼갠다.
+  // 동명이인 아닌 이름(대다수)은 기존과 동일하게 이름 하나 = 항목 하나.
+  const byName = {};
+  bookings.forEach(b=>{ if(!byName[b.name]) byName[b.name] = []; byName[b.name].push(b); });
+  const buildCustEntry = (name, bks, smId) => {
+    let phone='', lastDate='', count=0;
+    bks.forEach(b=>{
+      if(!b._phonePlaceholder) count++;
+      if(!b.cancelled && !b._phonePlaceholder && b.date > (lastDate||'')) lastDate = b.date;
+      if(b.phone && !phone) phone = b.phone;
+    });
+    return { name, phone, lastDate, count, smId: smId||null };
+  };
+  let custs = [];
+  Object.entries(byName).forEach(([name, bks])=>{
+    const smIds = [...new Set(bks.filter(b=>b.smmate && b.smmate_id!=null && b.smmate_id!=='').map(b=>String(b.smmate_id)))];
+    if (smIds.length <= 1) {
+      custs.push(buildCustEntry(name, bks, null));
+      return;
+    }
+    smIds.forEach(smId=>{
+      custs.push(buildCustEntry(name, bks.filter(b=>b.smmate && String(b.smmate_id)===smId), smId));
+    });
+    const directBks = bks.filter(b=>!b.smmate);
+    if (directBks.length) custs.push(buildCustEntry(name, directBks, 'direct'));
   });
-  let custs = Object.values(custMap);
 
   if(q) {
     const qDigits = q.replace(/[^0-9]/g,'');
@@ -3966,17 +4017,25 @@ function renderCustSearchPopup() {
     const motiveTag = cx.visitMotive
       ? '<span style="font-size:10px;background:#e0f2fe;color:#0369a1;border-radius:4px;padding:1px 5px">' + escHtml(cx.visitMotive) + '</span>'
       : '';
+    const isSplit = c.smId && c.smId !== 'direct';
+    const custNoTag = isSplit
+      ? '<span style="font-size:10px;background:#fef3c7;color:#92400e;border-radius:4px;padding:1px 5px;font-weight:700" title="동명이인 — smmate_id 기준으로 분리된 항목">#' + ((Number(c.smId)>0 && Number(c.smId)<20000) ? c.smId : '없음') + '</span>'
+      : '';
+    const directTag = c.smId === 'direct'
+      ? '<span style="font-size:10px;background:#fee2e2;color:#dc2626;border-radius:4px;padding:1px 5px;font-weight:700" title="같은 이름의 동명이인 SM 인물과 매칭 안 된 직접등록건 — 수작업 확인 필요">미확인</span>'
+      : '';
     const el = document.createElement('div');
     el.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;cursor:pointer;transition:background .1s';
     el.onmouseover = function(){ this.style.background='#f0f0ff'; };
     el.onmouseout  = function(){ this.style.background=''; };
-    el.onclick = (function(name){ return function(){ selectCustFromPopup(name); }; })(c.name);
+    el.onclick = (function(name,smId){ return function(){ selectCustFromPopup(name,smId); }; })(c.name, c.smId);
     el.innerHTML =
       '<div style="width:38px;height:38px;border-radius:50%;background:#6366f1;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;flex-shrink:0">' + escHtml(dispName(c.name).slice(0,1)) + '</div>' +
       '<div style="flex:1;min-width:0">' +
         '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
           '<span style="font-size:15px;font-weight:800;color:#1a1a2e">' + escHtml(dispName(c.name)) + '</span>' +
           (c.phone ? '<span style="font-size:12px;color:#6b7280">' + escHtml(c.phone) + '</span>' : '') +
+          custNoTag + directTag +
           motiveTag +
         '</div>' +
         '<div style="font-size:12px;color:#9ca3af;margin-top:2px">방문 ' + c.count + '회' + (c.lastDate ? ' · 최근 ' + fmtDateKo(c.lastDate) : '') + '</div>' +
@@ -7068,23 +7127,65 @@ function deletePhotoFromDB(custName, photoId) {
 function resizeImage(file, maxW, maxH, quality) {
   return new Promise(resolve => {
     const reader = new FileReader();
+    reader.onerror = () => resolve(null);
     reader.onload = e => {
       const img = new Image();
+      img.onerror = () => resolve(null);
       img.onload = () => {
-        let w = img.width, h = img.height;
-        if(w > maxW || h > maxH) {
-          const r = Math.min(maxW/w, maxH/h);
-          w = Math.round(w*r); h = Math.round(h*r);
-        }
-        const c = document.createElement('canvas');
-        c.width = w; c.height = h;
-        c.getContext('2d').drawImage(img, 0, 0, w, h);
-        resolve(c.toDataURL('image/jpeg', quality));
+        try {
+          let w = img.width, h = img.height;
+          if(w > maxW || h > maxH) {
+            const r = Math.min(maxW/w, maxH/h);
+            w = Math.round(w*r); h = Math.round(h*r);
+          }
+          const c = document.createElement('canvas');
+          c.width = w; c.height = h;
+          // <img>로 디코드한 비트맵은 최신 브라우저(Chrome/Firefox/Safari)에서 EXIF 방향을 이미 반영한 상태라
+          // canvas에 그대로 그리면 세로사진이 눕지 않고 유지됨(image-orientation:from-image가 <img> 기본값).
+          c.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(c.toDataURL('image/jpeg', quality));
+        } catch(err) { resolve(null); }
       };
       img.src = e.target.result;
     };
     reader.readAsDataURL(file);
   });
+}
+function fileToDataUrl(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onerror = () => resolve(null);
+    reader.onload = e => resolve(e.target.result);
+    reader.readAsDataURL(file);
+  });
+}
+function fmtBytes(n) {
+  if(n >= 1024*1024) return (n/1024/1024).toFixed(1)+'MB';
+  return Math.round(n/1024)+'KB';
+}
+function dataUrlBytes(durl) {
+  const i = durl.indexOf(',');
+  const b64 = i>=0 ? durl.slice(i+1) : durl;
+  return Math.round(b64.length * 3/4);
+}
+// 업로드용 "원본급" 사진 압축 — 긴 변 최대 1600px, JPEG 0.8.
+// 이미 작은 파일(300KB 이하)은 재인코딩 없이 원본 그대로, 압축(리사이즈) 실패 시에도 원본 그대로 저장.
+const PHOTO_MAX_EDGE = 1600;
+const PHOTO_QUALITY = 0.8;
+const PHOTO_SKIP_UNDER = 300*1024;
+async function compressPhotoForUpload(file) {
+  const origSize = file.size;
+  if (origSize <= PHOTO_SKIP_UNDER) {
+    const dataUrl = await fileToDataUrl(file);
+    return { dataUrl, origSize, finalSize: dataUrl ? dataUrlBytes(dataUrl) : origSize, skipped:true, failed:!dataUrl };
+  }
+  const resized = await resizeImage(file, PHOTO_MAX_EDGE, PHOTO_MAX_EDGE, PHOTO_QUALITY);
+  if (resized) {
+    return { dataUrl: resized, origSize, finalSize: dataUrlBytes(resized), skipped:false, failed:false };
+  }
+  // 압축 실패 → 원본 그대로 저장
+  const fallback = await fileToDataUrl(file);
+  return { dataUrl: fallback, origSize, finalSize: fallback ? dataUrlBytes(fallback) : origSize, skipped:false, failed:true };
 }
 
 async function handlePhotoFiles(custName, files, bookingId) {
@@ -7092,11 +7193,14 @@ async function handlePhotoFiles(custName, files, bookingId) {
   if(!arr.length) return;
   for(const file of arr) {
     try {
-      const [thumb, full] = await Promise.all([
+      const [thumb, fullResult] = await Promise.all([
         resizeImage(file, 160, 160, 0.8),
-        resizeImage(file, 1400, 1400, 0.88)
+        compressPhotoForUpload(file)
       ]);
-      await savePhotoToDB(custName, thumb, full, file.name, bookingId||null);
+      if (!fullResult.dataUrl) { console.error('사진 처리 실패:', file.name); continue; }
+      await savePhotoToDB(custName, thumb || fullResult.dataUrl, fullResult.dataUrl, file.name, bookingId||null);
+      const tag = fullResult.skipped ? ' (원본 유지)' : fullResult.failed ? ' (압축 실패, 원본 저장)' : '';
+      toast(`${file.name}: ${fmtBytes(fullResult.origSize)} → ${fmtBytes(fullResult.finalSize)}${tag}`);
     } catch(e) { console.error('사진 저장 오류:', e); }
   }
   // 워크플로우 사진 섹션 갱신
@@ -7524,68 +7628,61 @@ function goToCust(name) {
   window.open(location.pathname + '?cust=' + encodeURIComponent(name), '_blank');
 }
 
-async function showCustDetail(name) {
-  // ★ 같은 고객을 저장·갱신 후 다시 그리는 경우 스크롤 위치 유지 (다른 고객 열 땐 맨 위)
-  const _cdSame = (_lastCustName === name);
-  const _cdRightEl = document.getElementById('right');
-  const _cdScroll = (_cdSame && _cdRightEl) ? _cdRightEl.scrollTop : 0;
-  _lastCustName = name;
-  const allBks = bookings.filter(b=>b.name===name).sort((a,bb)=>a.date.localeCompare(bb.date)||a.time.localeCompare(bb.time));
-  if(!allBks.length) return;
-  // SM메이트 방문기록 Supabase에서 불러오기 (지연 로딩)
-  if (typeof supa !== 'undefined') {
-    try {
-      const custId = Object.keys(custNumbers).find(k => k === name);
-      const smmateId = custId ? custNumbers[custId] : null;
-      if (smmateId && smmateId < 20000) {
-        const { data: recs } = await supa.from('visit_records')
-          .select('recorded_at,memo')
-          .eq('customer_no', String(smmateId))
-          .order('recorded_at', { ascending: false })
-          .limit(50);
-        if (recs && recs.length > 0) {
-          if (!custLogs[name]) custLogs[name] = [];
-          custLogs[name] = custLogs[name].filter(l => l.from !== 'smmate');
-          recs.forEach(r => {
-            if (r.memo && r.memo.trim()) {
-              custLogs[name].push({ dt: r.recorded_at ? r.recorded_at.split(' ')[0] : '', tm: '', text: r.memo.trim(), from: 'smmate' });
-            }
-          });
-        }
-      }
-      // 출고상품 불러오기 → smmate_id 기준, 계약번호별로 그룹핑
-      if (smmateId && smmateId < 20000) {
-        const { data: prods } = await supa.from('order_products')
-          .select('id,product_detail,delivery_status,contract_no,is_delivered')
-          .eq('customer_id', String(smmateId));
-        if (prods && prods.length > 0) {
-          // 계약번호별로 그룹핑
-          window._smProducts = window._smProducts || {};
-          const byContract = {};
-          prods.forEach(p => {
-            if (!p.product_detail) return;
-            const cno = (p.contract_no || 'unknown').trim();
-            if (!byContract[cno]) byContract[cno] = [];
-            byContract[cno].push(p);
-          });
-          window._smProducts[name] = byContract;
-        }
-      }
-    } catch(e) { console.warn('방문기록 로드 실패:', e); }
-  }
-  // placeholder 예약 제외한 실제 예약 목록 (히스토리 카드 표시용)
-  const bks = allBks.filter(b=>!b._phonePlaceholder);
-  // 전화번호는 모든 예약에서 수집 (placeholder 포함)
+// ── [재키잉 파일럿] SM 동명이인 분리 검증용 ──────────────────────────
+// custProfiles/custMemos/custNumbers(이름 키, 이미 섞여 있음)는 전혀 안 건드리고,
+// customers 원본 테이블에서 smmate_id별로 직접 조회해 화면에 별도 패널로만 보여준다(읽기 전용, 저장 없음).
+async function fetchSmProfilesByIds(ids) {
+  if (!ids || !ids.length || typeof supa === 'undefined') return {};
+  const { data, error } = await supa.from('customers')
+    .select('id,baby_name,mom_name,dad_name,mom_phone,dad_phone,memo,last_visit')
+    .in('id', ids.map(Number));
+  if (error || !data) { console.error('SM 프로필 조회 실패(파일럿):', error); return {}; }
+  const out = {};
+  data.forEach(r => { out[String(r.id)] = r; });
+  return out;
+}
+function buildDupSmPanel(name, distinctSmIds, profiles, allBks) {
+  const rows = distinctSmIds.map(smId => {
+    const p = profiles[smId] || {};
+    const bks = allBks.filter(b => b.smmate && String(b.smmate_id) === smId);
+    const last = bks[bks.length - 1];
+    const custNoDisp = (Number(smId) > 0 && Number(smId) < 20000) ? `#${smId}` : '(고객번호 없음)';
+    return `<div style="background:#fff;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;margin-top:6px">
+      <div style="font-size:12px;font-weight:700;color:#92400e">${custNoDisp} · smmate_id ${smId}${p.mom_phone?` · ${escHtml(p.mom_phone)}`:''}</div>
+      ${last?`<div style="font-size:11px;color:#78716c;margin-top:2px">최근 방문: ${last.date} ${(PRODUCTS[last.product]||{}).name||last.product} (예약 ${bks.length}건)</div>`:''}
+      ${p.memo&&p.memo.trim()?`<div style="font-size:12px;color:#44403c;margin-top:4px;white-space:pre-wrap">📝 ${escHtml(p.memo.trim())}</div>`:''}
+    </div>`;
+  }).join('');
+  return `<div style="margin:10px 14px 0;background:#fffbeb;border:1.5px solid #fbbf24;border-radius:10px;padding:10px 12px">
+    <div style="font-size:12px;font-weight:800;color:#b45309">⚠️ [재키잉 파일럿] "${escHtml(dispName(name))}" 이름으로 SM에 ${distinctSmIds.length}명이 등록돼 있습니다 — 아래는 각자 원본(customers 테이블) 기준 정보입니다. 밑에 있는 기존 프로필/메모 박스는 아직 두 사람이 섞인 상태이니 참고만 하세요.</div>
+    ${rows}
+  </div>`;
+}
+// [2단계] 동명이인 중 한 명 — smmate_id 기준 조회+편집 화면.
+// custProfiles/custMemos는 이름이 아니라 합성 키 'sm_<smmate_id>'로 읽고 쓴다 — 같은 이름의 다른 smmate_id와 절대 안 섞임.
+// customers 원본(SM)과 고객번호(=smmate_id)는 여기서 절대 안 바꿈 — 표시만 함.
+function smKey(smmateId) { return 'sm_' + smmateId; }
+async function showCustDetailBySmId(name, smmateId) {
+  const allBks = bookings.filter(b => b.smmate && b.name===name && String(b.smmate_id)===String(smmateId))
+    .sort((a,bb)=>a.date.localeCompare(bb.date)||a.time.localeCompare(bb.time));
+  const profiles = await fetchSmProfilesByIds([smmateId]);
+  const p = profiles[String(smmateId)] || {};
+  const custNo = (Number(smmateId)>0 && Number(smmateId)<20000) ? smmateId : '(없음)';
+  const phone = p.mom_phone || p.dad_phone || [...allBks].reverse().map(b=>b.phone).find(Boolean) || '';
+  const sKey = smKey(smmateId);
+  const safeSKey = sKey; // sm_16422 형태라 이스케이프 필요한 특수문자 없음
+  // 메모: 이 smmate_id로 저장된 게 있으면 그걸(빈 문자열로 지운 것도 포함), 없으면 SM 원본 메모를 초기값으로
+  const savedMemo = custMemos[sKey];
+  const custMemo = (savedMemo !== undefined && savedMemo !== null) ? savedMemo : (p.memo || '');
+  const familyInfo = getCustProfile(sKey).familyInfo || '';
+
+  _lastCustName = name + '::sm:' + smmateId;
   _custDetailName = name;
-  localStorage.setItem('gamtan_cust_detail', name);
   localStorage.setItem('gamtan_view', 'cust');
-  pushNav({ view: 'cust', custName: name });
 
-
-  // 우측 패널 열기
   const right = document.getElementById('right');
   if(right) {
-    right.style.display = '';  // month 뷰에서 숨겨진 경우 복원
+    right.style.display = '';
     right.scrollTop = 0;
     if(window.innerWidth <= 768) {
       right.classList.add('mobile-show');
@@ -7598,39 +7695,147 @@ async function showCustDetail(name) {
   wf.style.display='block';
   selectedId = null;
 
-  // 통계 계산
-  const custNo = getCustNo(name);
-  const totalVisits = bks.length; // 실제 예약만 카운트
-  const totalSpent = bks.reduce((s,b)=>s+(b.priceItems?priceTotal(b):(b.smmate&&b.payments?.total?b.payments.total:0)),0);
-  const totalPaid  = bks.reduce((s,b)=>s+(b.payments?paidTotal(b):0),0);
-  const allPhone = allBks.map(x=>x.phone).filter(Boolean); // placeholder 포함해서 전화번호 수집
-  const allEmail = allBks.map(x=>x.email).filter(Boolean);
-  const allFamily = allBks.map(x=>x.familyNames).filter(Boolean);
-  const dispPhone = allPhone[allPhone.length-1]||'';
-  const dispEmail = allEmail[allEmail.length-1]||'';
-  const dispFamily = allFamily[allFamily.length-1]||'';
-  const hasSns = allBks.some(b=>b.snsConsent);
-  const latestB = allBks[allBks.length-1]; // placeholder 포함 전체에서 최신 예약
-  const {label:latestStatus, color:latestColor} = latestB ? getDynamicStatusLabel(latestB) : {label:'전화등록',color:'#9ca3af'};
-  const custMemo = custMemos[name]||'';
-  const logs = (custLogs[name]||[]).slice(0,30); // 최근 30개
-  const safeName = name.replace(/'/g,"\\'");
-  const prof = getCustProfile(name);
-  const familyInfo = prof.familyInfo || prof.husbandName
-    ? ((prof.familyInfo||'') || [(prof.husbandName?'남편: '+prof.husbandName:''),(prof.childNames?'아이: '+prof.childNames:'')].filter(Boolean).join('\n'))
-    : '';
+  const totalVisits = allBks.length;
+  const totalSpent = allBks.reduce((s,b)=>s+(b.payments?.total?Number(b.payments.total):0),0);
+  const totalPaid  = allBks.reduce((s,b)=>s+(b.payments?paidTotal(b):0),0);
 
-  // 방문 히스토리 카드 (클릭 시 인라인 상세 토글)
-  // 실제 예약이 없는 경우 (전화 등록 고객) 안내 메시지
-  const noHistHtml = bks.length === 0
-    ? `<div style="text-align:center;padding:28px 16px;color:#374151;font-size:14px;background:#f0fdf4;border-radius:12px;border:2px solid #86efac">
-        <div style="font-size:28px;margin-bottom:8px">📞</div>
-        <div style="font-weight:700;color:#16a34a;margin-bottom:4px">전화 상담 고객으로 등록됨</div>
-        <div style="font-size:12px;color:#6b7280;margin-bottom:12px">${dispPhone ? '📱 '+dispPhone : '전화번호 없음'}</div>
-        <button onclick="addBookingForCustomer(event,'${safeName}')"
-          style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer">＋ 예약 추가하기</button>
-      </div>` : '';
-  const historyHtml = bks.length === 0 ? noHistHtml : [...bks].reverse().map(b=>{
+  const safeNameJs = name.replace(/'/g,"\\'");
+  const histRows = allBks.length ? [...allBks].reverse().map(b=>{
+    const {label:stLabel,color:stColor} = getDynamicStatusLabel(b);
+    const prod = PRODUCTS[b.product]?.name || b.product;
+    return `<div onclick="openBookingFromSmView('${safeNameJs}','${b.id}')" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #f3f4f6;cursor:pointer" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+      <span style="font-size:12px;color:#6b7280;min-width:92px">${escHtml(b.date||'')} ${fmtTime(b.time||'')}</span>
+      <span style="font-size:12px;font-weight:600;color:#374151;flex:1">${escHtml(prod)}</span>
+      <span style="font-size:11px;font-weight:700;color:${stColor}">${escHtml(stLabel||'')}</span>
+      <span style="font-size:14px;color:#c7d2fe">›</span>
+    </div>`;
+  }).join('') : `<div style="padding:16px;text-align:center;color:#9ca3af;font-size:13px">예약 기록 없음</div>`;
+
+  wf.innerHTML = `
+    <div style="margin:10px 14px 0;background:#eff6ff;border:1.5px solid #93c5fd;border-radius:10px;padding:8px 12px;font-size:11px;color:#1e40af">
+      [2단계] smmate_id ${escHtml(String(smmateId))} 기준 화면입니다. 아래 가족정보·메모는 이 사람(${escHtml(String(smmateId))})에게만 저장되고, 같은 이름의 다른 사람에겐 안 붙습니다. 고객번호·SM 원본은 여기서 수정할 수 없습니다.
+    </div>
+    <div style="padding:14px 16px 12px;border-bottom:1px solid #f0f0f0">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+        <span style="font-size:20px;font-weight:800;color:#1a1a2e">${escHtml(dispName(name))}님</span>
+        <span style="font-size:13px;background:#e0e7ff;color:#4338ca;border-radius:6px;padding:2px 8px;font-weight:700">#${custNo}</span>
+        <span style="font-size:11px;background:#fef3c7;color:#92400e;border-radius:6px;padding:2px 8px;font-weight:700">smmate_id ${escHtml(String(smmateId))}</span>
+      </div>
+      ${phone?`<span style="font-size:13px;background:#e0f2fe;color:#0369a1;border-radius:7px;padding:3px 9px">📞 ${escHtml(phone)}</span>`:''}
+    </div>
+    <!-- 가족 정보 (smmate_id 기준 저장) -->
+    <div id="cust-family-section-${safeSKey}" style="margin:12px 14px 0;background:#fdf4ff;border:1.5px solid #e9d5ff;border-radius:10px;padding:10px 13px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+        <span style="font-size:12px;font-weight:700;color:#7c3aed">👨‍👩‍👧 가족 정보</span>
+        <button onclick="toggleCustFamilyEdit('${safeSKey}','${safeSKey}')"
+          style="margin-left:auto;font-size:11px;background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd;border-radius:6px;padding:2px 9px;cursor:pointer;font-weight:600">✏️ 수정</button>
+      </div>
+      <div id="cust-family-view-${safeSKey}">
+        ${familyInfo
+          ? `<span style="font-size:13px;color:#6b21a8;line-height:1.7;white-space:pre-wrap">${escHtml(familyInfo)}</span>`
+          : `<span style="font-size:13px;color:#c4b5fd;font-style:italic">미입력 — 수정 버튼을 눌러 가족 정보를 추가하세요</span>`}
+      </div>
+      <div id="cust-family-edit-${safeSKey}" style="display:none">
+        <textarea id="cust-family-input-${safeSKey}" rows="3"
+          style="width:100%;box-sizing:border-box;border:1.5px solid #c4b5fd;border-radius:8px;padding:7px 10px;font-size:13px;font-family:inherit;resize:vertical;outline:none;background:#fff;color:#333;line-height:1.6"
+        >${escHtml(familyInfo)}</textarea>
+        <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px">
+          <button onclick="saveCustFamilyEdit('${safeSKey}','${safeSKey}')"
+            style="background:#7c3aed;color:#fff;border:none;border-radius:7px;padding:6px 16px;font-size:13px;cursor:pointer;font-weight:700">저장</button>
+          <button onclick="cancelCustFamilyEdit('${safeSKey}')"
+            style="background:#f5f3ff;color:#7c3aed;border:1px solid #c4b5fd;border-radius:7px;padding:6px 12px;font-size:13px;cursor:pointer">취소</button>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 14px">
+      <div style="flex:1;min-width:70px;background:#f0f0ff;border-radius:10px;padding:9px 10px;text-align:center">
+        <div style="font-size:12px;color:#6366f1;font-weight:600">총 방문</div>
+        <div style="font-size:22px;font-weight:800;color:#4338ca">${totalVisits}회</div>
+      </div>
+      <div style="flex:1;min-width:70px;background:#f0fdf4;border-radius:10px;padding:9px 10px;text-align:center">
+        <div style="font-size:12px;color:#16a34a;font-weight:600">총 결제액</div>
+        <div style="font-size:16px;font-weight:800;color:#15803d">${totalSpent>0?fmtPrice(totalSpent):'-'}</div>
+      </div>
+      <div style="flex:1;min-width:70px;background:#fff7ed;border-radius:10px;padding:9px 10px;text-align:center">
+        <div style="font-size:12px;color:#ea580c;font-weight:600">수금액</div>
+        <div style="font-size:16px;font-weight:800;color:#c2410c">${totalPaid>0?fmtPrice(totalPaid):'-'}</div>
+      </div>
+    </div>
+    <div style="margin:0 14px 4px;background:#fffde7;border:1.5px solid #fde68a;border-radius:10px;padding:10px 12px">
+      <div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:6px">📝 상담 메모 <span style="font-size:10px;font-weight:400;color:#b45309">(이 사람 전용 — smmate_id ${escHtml(String(smmateId))}에만 저장. 처음엔 SM 원본 메모로 채워짐)</span></div>
+      <textarea id="cust-memo-ta-main" lang="ko"
+        placeholder="상담 메모"
+        style="width:100%;box-sizing:border-box;border:none;background:transparent;font-size:13px;color:#333;resize:none;outline:none;font-family:inherit;line-height:1.7;overflow:hidden;min-height:40px"
+        oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px';custMemos['${safeSKey}']=this.value;debouncedSaveCustMemo('${safeSKey}')"
+        onload="this.style.height=this.scrollHeight+'px'"
+      >${escHtml(custMemo)}</textarea>
+    </div>
+    <div style="margin:10px 14px 14px;background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;overflow:hidden">
+      <div style="font-size:12px;font-weight:700;color:#374151;padding:8px 10px;border-bottom:1px solid #e5e7eb">🗓 촬영 이력 (${allBks.length}건)</div>
+      ${histRows}
+    </div>
+    <!-- 예약 상세 모달: 클릭한 그 예약 하나만 표시. showCustDetail(이름 병합 화면)로는 절대 이동하지 않음 -->
+    <div id="sm-booking-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:600;align-items:flex-start;justify-content:center;overflow-y:auto;padding:32px 12px" onclick="if(event.target===this) closeSmBookingModal()">
+      <div style="background:#fff;border-radius:14px;max-width:520px;width:100%;position:relative;box-shadow:0 20px 50px rgba(0,0,0,.25)">
+        <button onclick="closeSmBookingModal()" style="position:absolute;top:8px;right:10px;background:#f3f4f6;border:none;border-radius:50%;width:28px;height:28px;font-size:15px;color:#6b7280;cursor:pointer;z-index:1">✕</button>
+        <div id="sm-booking-modal-body" style="padding:16px 14px"></div>
+      </div>
+    </div>
+  `;
+  const ta = document.getElementById('cust-memo-ta-main');
+  if (ta) { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
+}
+// 모달(#sm-booking-modal) 안에 예약 하나(bid)의 카드만 그린다. openBookingFromSmView(최초 오픈)와
+// smmatePriceOverride(모달이 열린 채로 저장했을 때 그 자리에서 다시 그리는 경우) 양쪽이 이 헬퍼를 공유한다.
+// safeName/dispPhone 계산도 여기 한 곳에 모아서, 두 호출부가 서로 다른 값을 넘기다 어긋나는 일이 없게 한다.
+// modal.dataset.bid에 지금 표시 중인 bid를 남겨서, 다른 함수가 "지금 이 모달이 이 예약을 보여주는 중인지" 판단할 수 있게 한다.
+function renderSmBookingModalCard(bid) {
+  const b = bookings.find(x=>x.id===bid);
+  if(!b) return false;
+  const modal = document.getElementById('sm-booking-modal');
+  const body = document.getElementById('sm-booking-modal-body');
+  if(!modal || !body) return false;
+  const safeNameJs = b.name.replace(/'/g,"\\'");
+  // 모달 body를 통째로 비우고 다시 그리므로 hist-card-/hist-detail- 등 id가 동시에 두 벌 존재하지 않음.
+  // showCustDetailBySmId 화면 자체는 촬영 이력을 요약 행(id 없음)으로만 그리므로 이 카드의 id들과 겹칠 원본도 없음.
+  body.innerHTML = buildHistCardHtml(b, b.name, safeNameJs, b.phone || '');
+  modal.dataset.bid = bid;
+  // 방금 그린 카드는 buildHistCardHtml 기본값대로 항상 접힌(display:none) 상태로 시작한다 —
+  // 모달에 띄우는 모든 경우(최초 오픈, 금액 수정 override 저장 후 재렌더)에 펼쳐서 보여준다.
+  // 주의: 여기서 toggleHistDetail(bid)를 쓰면 안 됨 — 그 함수는 끝에서 saveOpenHistCards()를 호출해
+  // gamtan_open_hist_cards(전역 localStorage, 이름/고객 스코프 없음)를 덮어쓰고, 그게 나중에 showCustDetail(이름
+  // 병합 화면)의 restoreOpenHistCards()에 그대로 적용돼 엉뚱한 카드가 펼쳐지는 버그로 이어졌다.
+  // 모달은 "목록 화면의 펼침 기억"과 무관한 1회성 상세 보기이므로, display/chevron/테두리색만 직접 맞추고
+  // 전역 저장소는 절대 건드리지 않는다.
+  const detail = document.getElementById('hist-detail-'+bid);
+  const chev   = document.getElementById('hist-chev-'+bid);
+  const card   = document.getElementById('hist-card-'+bid);
+  if(detail) detail.style.display = 'block';
+  if(chev) chev.textContent = '▲';
+  if(card) {
+    const done = b.product==='id' ? (b.currentStage||0)>=2 : (b.currentStage||0)>=8;
+    card.style.borderColor = b.cancelled ? '#d1d5db' : b.postponed ? '#fed7aa' : b.dateTbd ? '#f9a8d4' : done ? '#059669' : '#6366f1';
+  }
+  return true;
+}
+// smmate_id 기준 화면(showCustDetailBySmId)의 "촬영 이력" 항목 클릭 → showCustDetail(이름 병합 화면)로 절대 이동하지 않고,
+// 지금 보고 있는 smmate_id 화면 위에 모달로 그 예약(booking) 카드 하나만 띄운다.
+// b.id는 예약별 고유값이라 동명이인 다른 사람의 예약과 절대 안 섞인다 — 통계·메모도 이 카드엔 아예 없으므로 병합될 데이터 자체가 없음.
+function openBookingFromSmView(name, bid) {
+  // 펼침 처리는 renderSmBookingModalCard 안에서 이미 끝남 — 여기서 또 toggleHistDetail 하면 도로 접힘.
+  if(!renderSmBookingModalCard(bid)) return;
+  const modal = document.getElementById('sm-booking-modal');
+  modal.style.display = 'flex';
+}
+function closeSmBookingModal() {
+  const modal = document.getElementById('sm-booking-modal');
+  const body = document.getElementById('sm-booking-modal-body');
+  if(modal) { modal.style.display = 'none'; delete modal.dataset.bid; }
+  if(body) body.innerHTML = '';
+}
+// 예약 1건의 "촬영 이력" 카드 HTML. showCustDetail(이름 화면)의 방문 목록과 showCustDetailBySmId의 예약 상세 모달이
+// 이 함수를 그대로 공유해서 완전히 동일한 카드를 그린다 — b/name/safeName/dispPhone 외 외부 상태를 읽지 않는 순수 함수.
+function buildHistCardHtml(b, name, safeName, dispPhone) {
     const p = PRODUCTS[b.product]||PRODUCTS.story;
     const {label:stLabel,color:stColor} = getDynamicStatusLabel(b);
     const t = (parseInt(b.adults)||0)+(parseInt(b.kids)||0);
@@ -7976,9 +8181,122 @@ async function showCustDetail(name) {
         </div>
       </div>
     </div>`;
-  }).join('');
+}
+async function showCustDetail(name) {
+  // ★ 같은 고객을 저장·갱신 후 다시 그리는 경우 스크롤 위치 유지 (다른 고객 열 땐 맨 위)
+  const _cdSame = (_lastCustName === name);
+  const _cdRightEl = document.getElementById('right');
+  const _cdScroll = (_cdSame && _cdRightEl) ? _cdRightEl.scrollTop : 0;
+  _lastCustName = name;
+  const allBks = bookings.filter(b=>b.name===name).sort((a,bb)=>a.date.localeCompare(bb.date)||a.time.localeCompare(bb.time));
+  if(!allBks.length) return;
+  // [재키잉 파일럿] 이 이름에 smmate_id가 2개 이상이면(동명이인) 원본 기준 분리 패널 준비
+  const _distinctSmIds = [...new Set(allBks.filter(b=>b.smmate && b.smmate_id!=null && b.smmate_id!=='').map(b=>String(b.smmate_id)))];
+  const dupSmPanelHtml = _distinctSmIds.length > 1
+    ? buildDupSmPanel(name, _distinctSmIds, await fetchSmProfilesByIds(_distinctSmIds), allBks)
+    : '';
+  // SM메이트 방문기록 Supabase에서 불러오기 (지연 로딩)
+  if (typeof supa !== 'undefined') {
+    try {
+      const custId = Object.keys(custNumbers).find(k => k === name);
+      const smmateId = custId ? custNumbers[custId] : null;
+      if (smmateId && smmateId < 20000) {
+        const { data: recs } = await supa.from('visit_records')
+          .select('recorded_at,memo')
+          .eq('customer_no', String(smmateId))
+          .order('recorded_at', { ascending: false })
+          .limit(50);
+        if (recs && recs.length > 0) {
+          if (!custLogs[name]) custLogs[name] = [];
+          custLogs[name] = custLogs[name].filter(l => l.from !== 'smmate');
+          recs.forEach(r => {
+            if (r.memo && r.memo.trim()) {
+              custLogs[name].push({ dt: r.recorded_at ? r.recorded_at.split(' ')[0] : '', tm: '', text: r.memo.trim(), from: 'smmate' });
+            }
+          });
+        }
+      }
+      // 출고상품 불러오기 → smmate_id 기준, 계약번호별로 그룹핑
+      if (smmateId && smmateId < 20000) {
+        const { data: prods } = await supa.from('order_products')
+          .select('id,product_detail,delivery_status,contract_no,is_delivered')
+          .eq('customer_id', String(smmateId));
+        if (prods && prods.length > 0) {
+          // 계약번호별로 그룹핑
+          window._smProducts = window._smProducts || {};
+          const byContract = {};
+          prods.forEach(p => {
+            if (!p.product_detail) return;
+            const cno = (p.contract_no || 'unknown').trim();
+            if (!byContract[cno]) byContract[cno] = [];
+            byContract[cno].push(p);
+          });
+          window._smProducts[name] = byContract;
+        }
+      }
+    } catch(e) { console.warn('방문기록 로드 실패:', e); }
+  }
+  // placeholder 예약 제외한 실제 예약 목록 (히스토리 카드 표시용)
+  const bks = allBks.filter(b=>!b._phonePlaceholder);
+  // 전화번호는 모든 예약에서 수집 (placeholder 포함)
+  _custDetailName = name;
+  localStorage.setItem('gamtan_cust_detail', name);
+  localStorage.setItem('gamtan_view', 'cust');
+  pushNav({ view: 'cust', custName: name });
+
+
+  // 우측 패널 열기
+  const right = document.getElementById('right');
+  if(right) {
+    right.style.display = '';  // month 뷰에서 숨겨진 경우 복원
+    right.scrollTop = 0;
+    if(window.innerWidth <= 768) {
+      right.classList.add('mobile-show');
+      const nameEl = document.getElementById('mobile-back-name');
+      if(nameEl) nameEl.textContent = dispName(name) + '님';
+    }
+  }
+  document.getElementById('empty-state').style.display='none';
+  const wf = document.getElementById('workflow');
+  wf.style.display='block';
+  selectedId = null;
+
+  // 통계 계산
+  const custNo = getCustNo(name);
+  const totalVisits = bks.length; // 실제 예약만 카운트
+  const totalSpent = bks.reduce((s,b)=>s+(b.priceItems?priceTotal(b):(b.smmate&&b.payments?.total?b.payments.total:0)),0);
+  const totalPaid  = bks.reduce((s,b)=>s+(b.payments?paidTotal(b):0),0);
+  const allPhone = allBks.map(x=>x.phone).filter(Boolean); // placeholder 포함해서 전화번호 수집
+  const allEmail = allBks.map(x=>x.email).filter(Boolean);
+  const allFamily = allBks.map(x=>x.familyNames).filter(Boolean);
+  const dispPhone = allPhone[allPhone.length-1]||'';
+  const dispEmail = allEmail[allEmail.length-1]||'';
+  const dispFamily = allFamily[allFamily.length-1]||'';
+  const hasSns = allBks.some(b=>b.snsConsent);
+  const latestB = allBks[allBks.length-1]; // placeholder 포함 전체에서 최신 예약
+  const {label:latestStatus, color:latestColor} = latestB ? getDynamicStatusLabel(latestB) : {label:'전화등록',color:'#9ca3af'};
+  const custMemo = custMemos[name]||'';
+  const logs = (custLogs[name]||[]).slice(0,30); // 최근 30개
+  const safeName = name.replace(/'/g,"\\'");
+  const prof = getCustProfile(name);
+  const familyInfo = prof.familyInfo || prof.husbandName
+    ? ((prof.familyInfo||'') || [(prof.husbandName?'남편: '+prof.husbandName:''),(prof.childNames?'아이: '+prof.childNames:'')].filter(Boolean).join('\n'))
+    : '';
+
+  // 방문 히스토리 카드 (클릭 시 인라인 상세 토글)
+  // 실제 예약이 없는 경우 (전화 등록 고객) 안내 메시지
+  const noHistHtml = bks.length === 0
+    ? `<div style="text-align:center;padding:28px 16px;color:#374151;font-size:14px;background:#f0fdf4;border-radius:12px;border:2px solid #86efac">
+        <div style="font-size:28px;margin-bottom:8px">📞</div>
+        <div style="font-weight:700;color:#16a34a;margin-bottom:4px">전화 상담 고객으로 등록됨</div>
+        <div style="font-size:12px;color:#6b7280;margin-bottom:12px">${dispPhone ? '📱 '+dispPhone : '전화번호 없음'}</div>
+        <button onclick="addBookingForCustomer(event,'${safeName}')"
+          style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer">＋ 예약 추가하기</button>
+      </div>` : '';
+  const historyHtml = bks.length === 0 ? noHistHtml : [...bks].reverse().map(b=>buildHistCardHtml(b, name, safeName, dispPhone)).join('');
 
   wf.innerHTML = `
+    ${dupSmPanelHtml}
     <!-- ① 고객 헤더 -->
     <div style="padding:14px 16px 12px;border-bottom:1px solid #f0f0f0">
       <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px">
@@ -8177,6 +8495,7 @@ function cancelBooking(bid, custName) {
   b.cancelledAt = new Date().toISOString().slice(0,10);
   saveBookings();
   addCustLog(custName, `예약 취소 — ${fmtDateKo(b.date)} ${fmtTimePlain(b.time)} ${(PRODUCTS[b.product]||PRODUCTS.story).name}`);
+  // TODO(2차): smmate_id 스코프 유지 필요 — 모달에서 호출되면 이름 병합 화면(showCustDetail)으로 튕김
   showCustDetail(custName);
 }
 function uncancelBooking(bid, custName) {
@@ -8186,6 +8505,7 @@ function uncancelBooking(bid, custName) {
   b.cancelledAt = '';
   saveBookings();
   addCustLog(custName, `예약 취소 해제 — ${fmtDateKo(b.date)} ${fmtTimePlain(b.time)}`);
+  // TODO(2차): smmate_id 스코프 유지 필요 — 모달에서 호출되면 이름 병합 화면(showCustDetail)으로 튕김
   showCustDetail(custName);
 }
 
@@ -8219,6 +8539,7 @@ function confirmPostpone() {
     : '예약 연기 — ' + fmtDateKo(b.date) + ' (날짜 미정)';
   addCustLog(custName, logMsg);
   closePostponeModal();
+  // TODO(2차): smmate_id 스코프 유지 필요 — 모달에서 호출되면 이름 병합 화면(showCustDetail)으로 튕김
   showCustDetail(custName);
 }
 function unpostponeBooking(bid, custName) {
@@ -8229,6 +8550,7 @@ function unpostponeBooking(bid, custName) {
   b.postponedDate = '';
   saveBookings();
   addCustLog(custName, '연기 해제 — ' + fmtDateKo(b.date) + '로 복원');
+  // TODO(2차): smmate_id 스코프 유지 필요 — 모달에서 호출되면 이름 병합 화면(showCustDetail)으로 튕김
   showCustDetail(custName);
 }
 
@@ -8245,6 +8567,7 @@ function setGrowthCohort(bid, custName, val) {
     b.cohort = cohort;
   }
   saveBookings();
+  // TODO(2차): smmate_id 스코프 유지 필요 — 모달에서 호출되면 이름 병합 화면(showCustDetail)으로 튕김
   showCustDetail(custName);
 }
 
@@ -8255,6 +8578,7 @@ function setGrowthYear(bid, custName, val) {
   const parsed = parseInt(val);
   b.contractYear = (val==='' || isNaN(parsed) || parsed<1) ? null : parsed;
   saveBookings();
+  // TODO(2차): smmate_id 스코프 유지 필요 — 모달에서 호출되면 이름 병합 화면(showCustDetail)으로 튕김
   showCustDetail(custName);
 }
 
@@ -8278,6 +8602,7 @@ function moveToPostponedDate(bid, custName) {
   b.postponedDate = '';
   saveBookings();
   addCustLog(custName, '연기 날짜 확정 이동 — ' + fmtDateKo(oldDate) + ' → ' + fmtDateKo(newDate));
+  // TODO(2차): smmate_id 스코프 유지 필요 — 모달에서 호출되면 이름 병합 화면(showCustDetail)으로 튕김
   showCustDetail(custName);
 }
 
