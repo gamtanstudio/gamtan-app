@@ -9438,7 +9438,9 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
     };
     contractRows.slice(1).forEach(r => {
       const type = (r[ci.type]||'').trim();
-      if (!type || type === '메모') return;
+      // '촬영' 계열 스케줄만 예약으로 만든다 — 상담/재방문/출고 등 다른 스케줄구분까지 넣으면
+      // 같은 고객번호의 계약 1건이 여러 건의 예약으로 뻥튀기됨 (실시간 동기화의 .ilike('schedule_type','%촬영%')와 동일 기준)
+      if (!type || type === '메모' || !type.includes('촬영')) return;
       const no  = String(r[ci.custno]||'').trim();
       const ph  = (r[ci.phone]||'').trim();
       const entry = {
@@ -9469,7 +9471,8 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
     const ci2s = ch2.indexOf('상태');
     contractRows.slice(1).forEach(r => {
       const type = (r[ci2t]||'').trim();
-      if (!type || type === '메모') return;
+      // 위 contractByNo/contractByPhone 인덱스와 동일한 '촬영' 필터 — 안 맞추면 이름 매칭 경로에서만 다시 뻥튀기됨
+      if (!type || type === '메모' || !type.includes('촬영')) return;
       const nm = (r[ci2n]||'').trim().split('(')[0].trim();
       if (!nm) return;
       const entry = { type, name: nm,
