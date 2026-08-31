@@ -2146,9 +2146,10 @@ function applyRoleUI() {
 }
 
 // SM메이트 제목 → 앱 상품코드 매핑
-function smTitleToProduct(title) {
+// strict=true면 아무 키워드도 안 맞을 때 'story'로 기본값을 주지 않고 null을 돌려줌 (resolveSmProduct용)
+function smTitleToProduct(title, strict) {
   const t = (title||'').trim();
-  if (!t) return 'story';
+  if (!t) return strict ? null : 'story';
   if (t.includes('증명') || t.includes('여권') || t.includes('비자') ||
       t.includes('운전') || t.includes('사원') || t.includes('신분') ||
       t.includes('주민') || t.includes('반명함') || t.includes('서류') ||
@@ -2162,7 +2163,7 @@ function smTitleToProduct(title) {
       t.includes('돌') || t.includes('기념')) return 'simpfam';
   if (t.includes('가족') || t.includes('페밀리') || t.includes('패밀리') ||
       t.includes('family') || t.includes('Family') || t.includes('스냅')) return 'story';
-  return 'story';
+  return strict ? null : 'story';
 }
 
 // Supabase에서 데이터 로드
@@ -9318,9 +9319,11 @@ function exportData() {
 }
 
 // ====================== SM메이트 가져오기 ======================
-function smProductKey(smName) {
+// strict=true면 아무 키워드도 안 맞을 때 'story'로 기본값을 주지 않고 null을 돌려줌
+// (resolveSmProduct가 "진짜 매칭 실패"와 "매칭은 됐는데 story"를 구분하는 데 씀)
+function smProductKey(smName, strict) {
   const n = (smName||'').trim();
-  if (!n) return 'story';
+  if (!n) return strict ? null : 'story';
   if (n.includes('증명') || n.includes('선거사진')) return 'id';
   if (n.includes('가족성장') || n.includes('성장패키지')) return 'growth';
   if (n.includes('심플패밀리')) return 'simpfam';
@@ -9331,6 +9334,16 @@ function smProductKey(smName) {
   if (n.includes('가족')) return 'story';
   if (n.includes('프로필') || n.includes('화보') || n.includes('학사모') || n.includes('연주') || n.includes('우정') || n.includes('단체') || n.includes('커플') || n.includes('기념일')) return 'profile';
   if (n.includes('웨딩') || n.includes('만삭') || n.includes('스냅')) return 'profile';
+  return strict ? null : 'story';
+}
+
+// SM 상품명(smProduct)을 1순위로, 못 알아들으면(비었거나 키워드 매칭 실패) 계약 제목
+// ("1컷" 같은 축약 표현)을 smTitleToProduct로 보조 판정. 둘 다 실패하면 최종 기본값 'story'.
+function resolveSmProduct(smProduct, title) {
+  const byProduct = smProductKey(smProduct, true);
+  if (byProduct) return byProduct;
+  const byTitle = smTitleToProduct(title, true);
+  if (byTitle) return byTitle;
   return 'story';
 }
 
@@ -9567,7 +9580,7 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
     const totalAmt  = parseInt(r[mc.total])||0;
     const depositAmt= parseInt(r[mc.deposit])||0;
     const memoTxt   = (r[mc.memo]||'').toString().trim();
-    const prodKey   = smProductKey(smProduct);
+    const prodKey   = resolveSmProduct(smProduct, '');
 
     // 고객 등록 (customers는 앱 전체에서 이름 문자열 배열로 씀 — 상세정보는 custProfiles/custMemos에 저장)
     if (!customers.includes(cleanName)) {
@@ -9633,7 +9646,7 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
         if (bookings.find(b => b.id === bkId)) { skipped++; return; }
         bookings.push({
           id: bkId, name: cleanName, phone, customer_no: smCustNo,
-          product: smProductKey(c.title || smProduct),
+          product: resolveSmProduct(smProduct, c.title),
           date: c.date, time: c.time||'',
           adults: 2, kids: 0,
           memo: '[SM ' + c.type + '] ' + (c.title||smProduct)
