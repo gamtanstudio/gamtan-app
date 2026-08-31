@@ -2308,7 +2308,8 @@ async function loadFromSupabase() {
       });
       try {
         localStorage.setItem('gamtan_cust_numbers', JSON.stringify(custNumbers));
-        localStorage.setItem('gamtan_cust_memos', JSON.stringify(custMemos));
+        // gamtan_cust_memos는 아예 로컬 캐싱 안 함 — 아래 cust_memos 테이블 로딩에서 매번
+        // Supabase 원본으로 다시 채워지고, 덩치가 커서 localStorage 용량 초과의 주된 원인이었음
       } catch(e) {
         console.warn('localStorage 저장 실패 (용량 초과):', e);
       }
@@ -2442,7 +2443,8 @@ async function loadFromSupabase() {
         } catch(e) { console.error('상담메모 이관 실패:', e); }
       }
       custMemos = Object.assign({}, custMemos, serverMemos);
-      try { localStorage.setItem('gamtan_cust_memos', JSON.stringify(custMemos)); } catch(e) {}
+      // 로컬 캐싱은 건너뜀 — custMemos는 매 로드마다 Supabase(cust_memos 테이블)가 신뢰 소스이고,
+      // 덩치가 커서 localStorage 용량 초과(QuotaExceededError)의 주된 원인이었음. 화면은 이 변수로 바로 그림.
     } catch(e) { /* cust_memos 테이블 미생성 — 무시 */ }
 
     // ★ 활동기록(cust_logs) 서버에서 불러오기 + 로컬(메모리)에 남은 것 자동 이관
