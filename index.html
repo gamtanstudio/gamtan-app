@@ -9581,13 +9581,15 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
       }
     }
 
-    // 이력 메모 custMemos에 추가
+    // 이력 메모 custMemos에 추가 (custMemos는 앱 전체에서 이름→문자열 하나로 쓰임 — 배열 아님)
     if (smCustNo && histByNo[smCustNo]) {
-      if (!custMemos[cleanName]) custMemos[cleanName] = [];
+      if (typeof custMemos[cleanName] !== 'string') custMemos[cleanName] = '';
       histByNo[smCustNo].forEach(h => {
         if (!h.memo) return;
-        const already = custMemos[cleanName].find(m => m.text === h.memo);
-        if (!already) custMemos[cleanName].push({ date: (h.date||'').slice(0,10), text: h.memo });
+        if (custMemos[cleanName].includes(h.memo)) return;
+        const dateStr = (h.date||'').slice(0,10);
+        const line = (dateStr ? '[' + dateStr + '] ' : '') + h.memo;
+        custMemos[cleanName] = (custMemos[cleanName] ? custMemos[cleanName] + '\n' : '') + line;
       });
     }
 
