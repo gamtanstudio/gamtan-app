@@ -9420,6 +9420,20 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
     });
   }
 
+  // 같은 배열 안에 같은 (날짜+시각) 항목이 이미 있으면 새로 안 만들고 메모만 합침
+  // — 계약정보 원본은 촬영 1건이 상품/항목 수만큼 여러 줄로 쪼개져 있을 수 있어서,
+  //   그대로 다 넣으면 "촬영 1건 = 예약 여러 건"으로 뻥튀기됨
+  function mergeContractEntry(arr, entry) {
+    const dup = arr.find(e => e.date === entry.date && e.time === entry.time);
+    if (dup) {
+      if (entry.memo && !(dup.memo||'').includes(entry.memo)) {
+        dup.memo = dup.memo ? dup.memo + ' / ' + entry.memo : entry.memo;
+      }
+      return;
+    }
+    arr.push(entry);
+  }
+
   // ── 3. 계약정보 인덱스 (고객번호 → 예약 배열) ──
   const contractByNo = {};
   const contractByPhone = {};
@@ -9452,8 +9466,8 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
         memo:  (r[ci.memo]||'').trim(),
         state: (r[ci.state]||'').trim(),
       };
-      if (no) { if (!contractByNo[no]) contractByNo[no]=[]; contractByNo[no].push(entry); }
-      if (ph) { if (!contractByPhone[ph]) contractByPhone[ph]=[]; contractByPhone[ph].push(entry); }
+      if (no) { if (!contractByNo[no]) contractByNo[no]=[]; mergeContractEntry(contractByNo[no], entry); }
+      if (ph) { if (!contractByPhone[ph]) contractByPhone[ph]=[]; mergeContractEntry(contractByPhone[ph], entry); }
     });
   }
 
@@ -9480,7 +9494,7 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
         time: (r[ci2ti]||'').trim(), title: (r[ci2tl]||'').trim(),
         memo: (r[ci2m]||'').trim(), state: (r[ci2s]||'').trim() };
       if (!contractByName[nm]) contractByName[nm]=[];
-      contractByName[nm].push(entry);
+      mergeContractEntry(contractByName[nm], entry);
     });
   }
 
@@ -9517,28 +9531,18 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
   }
 
   // ── 5. 고객정보 메인 처리 ──
-  let addedCust = 0, addedBooking = 0, skipped = 0;
+  let addedCust = 0, addedBooking = 0, skipped = 0, custNoParseFailCount = 0;
 
   const masterRows = custRows || schedRows;
   const mh = masterRows[0];
-  // 고객정보 파일은 헤더가 1칸 밀려있어 indexOf 대신 실제 데이터 위치로 직접 매핑
-  const isCustFile = mh.includes('고유번호') && mh.includes('엄마아빠');
-  const mc = isCustFile ? {
-    rowno:    0,   // 고유번호
-    name:     1,   // 고객명
-    custno:   5,   // 고객번호
-    phone:    3,   // 전화번호
-    phone2:   -1,
-    product:  6,   // 상품명
-    contract: 7,   // 계약일
-    total:    9,   // 총액
-    deposit:  10,  // 선금
-    memo:     -1,
-  } : {
+  // 실제 헤더 이름으로 컬럼을 찾는다 (예전엔 "고객정보 파일은 헤더가 1칸 밀려있다"고 보고
+  // 고정 인덱스로 하드코딩했었는데, 파일마다 밀림 정도가 다르면 엉뚱한 컬럼을 읽어
+  // SM 고객번호가 깨지는 원인이 될 수 있어 제거함 — 못 찾으면 아래에서 콘솔 경고)
+  const mc = {
     rowno:    mh.indexOf('고유번호') !== -1 ? mh.indexOf('고유번호') : mh.indexOf('No'),
     name:     mh.indexOf('고객명') !== -1 ? mh.indexOf('고객명') : (mh.indexOf('아기') !== -1 ? mh.indexOf('아기') : -1),
     custno:   mh.indexOf('고객번호'),
-    phone:    mh.indexOf('엄마폰') !== -1 ? mh.indexOf('엄마폰') : mh.indexOf('휴대폰'),
+    phone:    mh.indexOf('엄마폰') !== -1 ? mh.indexOf('엄마폰') : (mh.indexOf('휴대폰') !== -1 ? mh.indexOf('휴대폰') : mh.indexOf('전화번호')),
     phone2:   mh.indexOf('아빠폰'),
     product:  mh.indexOf('상품명') !== -1 ? mh.indexOf('상품명') : mh.indexOf('상품'),
     contract: mh.indexOf('계약일'),
@@ -9546,6 +9550,9 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
     deposit:  mh.indexOf('선금'),
     memo:     mh.indexOf('메모'),
   };
+  if (mc.custno === -1) {
+    console.warn('[SM가져오기] "고객번호" 컬럼을 찾지 못했습니다 — SM 고객번호가 보존되지 않고 새 번호(20000+)가 발급될 수 있습니다. 헤더:', mh);
+  }
 
   masterRows.slice(1).forEach(r => {
     const rawName = (r[mc.name]||'').toString().trim();
@@ -9562,22 +9569,34 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
     const memoTxt   = (r[mc.memo]||'').toString().trim();
     const prodKey   = smProductKey(smProduct);
 
-    // 고객 등록 (전화번호 우선 → 이름 매칭)
-    let cust = (phone && customers.find(c => c.phone && c.phone === phone))
-            || customers.find(c => c.name === cleanName);
-
-    if (!cust) {
-      cust = { name: cleanName, phone, memo: memoTxt };
-      customers.push(cust);
+    // 고객 등록 (customers는 앱 전체에서 이름 문자열 배열로 씀 — 상세정보는 custProfiles/custMemos에 저장)
+    if (!customers.includes(cleanName)) {
+      customers.push(cleanName);
       addedCust++;
+    }
+    if (phone) {
+      if (!custProfiles[cleanName]) custProfiles[cleanName] = {};
+      custProfiles[cleanName].phone = phone;
+    }
+    if (memoTxt) {
+      if (typeof custMemos[cleanName] !== 'string') custMemos[cleanName] = '';
+      if (!custMemos[cleanName].includes(memoTxt)) {
+        custMemos[cleanName] = (custMemos[cleanName] ? custMemos[cleanName] + '\n' : '') + memoTxt;
+      }
+    }
 
-      // ★ SM메이트 원본 고객번호를 custNumbers에 그대로 저장
-      if (smCustNo && !isNaN(Number(smCustNo))) {
-        const smNo = Number(smCustNo);
+    // ★ SM메이트 원본 고객번호를 custNumbers에 그대로 보존 — 신규/기존 고객 상관없이 항상 backfill
+    //   (예전엔 신규 고객일 때만 채워서, 이미 있는 고객은 SM번호가 안 채워지고
+    //    나중에 화면에서 처음 조회될 때 assign_cust_no가 20000+ 새 번호를 발급해버렸음)
+    if (smCustNo) {
+      const smNo = Number(smCustNo);
+      if (!isNaN(smNo)) {
         custNumbers[cleanName] = smNo;
         // nextCustNo는 SM번호보다 항상 크게 유지 (20000 이상 보장)
         if (smNo >= nextCustNo) nextCustNo = smNo + 1;
         if (nextCustNo < 20000) nextCustNo = 20000;
+      } else {
+        custNoParseFailCount++;
       }
     }
 
@@ -9608,10 +9627,12 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
     if (contracts.length) {
       contracts.forEach((c, idx) => {
         if (!c.date) return;
-        const bkId = 'sm_c_' + smCustNo + '_' + idx;
+        // idx가 아니라 (고객번호+날짜+시각)로 키를 잡아야 촬영 1건=예약 1건이 안정적으로 유지됨
+        // (idx는 배열 안 위치일 뿐이라 원본 줄 수가 바뀌면 dedup이 깨짐)
+        const bkId = 'sm_c_' + (smCustNo || cleanName) + '_' + c.date + '_' + (c.time || 'notime');
         if (bookings.find(b => b.id === bkId)) { skipped++; return; }
         bookings.push({
-          id: bkId, name: cleanName, phone,
+          id: bkId, name: cleanName, phone, customer_no: smCustNo,
           product: smProductKey(c.title || smProduct),
           date: c.date, time: c.time||'',
           adults: 2, kids: 0,
@@ -9630,7 +9651,7 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
       const bkId = 'sm_c_' + (smCustNo || cleanName) + '_0';
       if (!bookings.find(b => b.id === bkId)) {
         bookings.push({
-          id: bkId, name: cleanName, phone,
+          id: bkId, name: cleanName, phone, customer_no: smCustNo,
           product: prodKey, date: contractDate, time: '',
           adults: 2, kids: 0,
           memo: '[SM메이트 계약] ' + smProduct
@@ -9645,8 +9666,13 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
     }
   });
 
+  if (custNoParseFailCount > 0) {
+    console.warn(`[SM가져오기] 고객번호 컬럼 값이 있는데 숫자로 안 읽힌 행 ${custNoParseFailCount}건 — 해당 고객은 SM 고객번호가 보존되지 않고 새 번호(20000+)가 발급될 수 있습니다.`);
+  }
+
   saveCustNumbers();
   saveCustMemos();
+  saveCustProfiles();
   saveBookings();
   saveCustomers();
   renderAll();
