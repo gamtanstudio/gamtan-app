@@ -9459,7 +9459,8 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
       title:  ch.indexOf('제목'),
       name:   ch.indexOf('고객명'),
       phone:  ch.indexOf('휴대폰'),
-      custno: ch.indexOf('고객번호'),
+      // 마스터 파일과 동일: "고유번호"가 진짜 SM 고유식별번호, "고객번호"는 최후 폴백
+      custno: ch.indexOf('고유번호') !== -1 ? ch.indexOf('고유번호') : ch.indexOf('고객번호'),
       memo:   ch.indexOf('메모'),
       state:  ch.indexOf('상태'),
     };
@@ -9544,17 +9545,23 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
   }
 
   // ── 5. 고객정보 메인 처리 ──
-  let addedCust = 0, addedBooking = 0, skipped = 0, custNoParseFailCount = 0;
+  let addedCust = 0, addedBooking = 0, skipped = 0, custNoParseFailCount = 0, custNoMissingCount = 0;
+  const custNoParseFails = [];   // 값은 있는데 숫자로 안 읽힌 행 (이름+원본값)
+  const custNoMissingNames = []; // 식별번호 컬럼 값이 아예 없는 행
 
   const masterRows = custRows || schedRows;
   const mh = masterRows[0];
-  // 실제 헤더 이름으로 컬럼을 찾는다 (예전엔 "고객정보 파일은 헤더가 1칸 밀려있다"고 보고
-  // 고정 인덱스로 하드코딩했었는데, 파일마다 밀림 정도가 다르면 엉뚱한 컬럼을 읽어
-  // SM 고객번호가 깨지는 원인이 될 수 있어 제거함 — 못 찾으면 아래에서 콘솔 경고)
+  // 실제 헤더 이름으로 컬럼을 찾는다. 고객 식별번호는 "고객번호"가 아니라 "고유번호"/"No"를 최우선으로
+  // 쓴다 — "고객번호"는 SM에서 비워두거나(예: 이번 유주희 케이스) 단체/코드성 문자열이 들어가는
+  // 경우가 있는 부가 필드고, "고유번호"/"No"가 SM 내부에서 항상 채워지는 진짜 고유식별번호
+  // (customers.id, 20000 미만이면 그대로 customer_no)다. "고객번호"는 최후의 폴백으로만 남겨둠.
+  const custNoIdx = mh.indexOf('고유번호') !== -1 ? mh.indexOf('고유번호')
+                   : mh.indexOf('No') !== -1 ? mh.indexOf('No')
+                   : mh.indexOf('고객번호');
   const mc = {
-    rowno:    mh.indexOf('고유번호') !== -1 ? mh.indexOf('고유번호') : mh.indexOf('No'),
+    rowno:    custNoIdx,
     name:     mh.indexOf('고객명') !== -1 ? mh.indexOf('고객명') : (mh.indexOf('아기') !== -1 ? mh.indexOf('아기') : -1),
-    custno:   mh.indexOf('고객번호'),
+    custno:   custNoIdx,
     phone:    mh.indexOf('엄마폰') !== -1 ? mh.indexOf('엄마폰') : (mh.indexOf('휴대폰') !== -1 ? mh.indexOf('휴대폰') : mh.indexOf('전화번호')),
     phone2:   mh.indexOf('아빠폰'),
     product:  mh.indexOf('상품명') !== -1 ? mh.indexOf('상품명') : mh.indexOf('상품'),
@@ -9564,7 +9571,7 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
     memo:     mh.indexOf('메모'),
   };
   if (mc.custno === -1) {
-    console.warn('[SM가져오기] "고객번호" 컬럼을 찾지 못했습니다 — SM 고객번호가 보존되지 않고 새 번호(20000+)가 발급될 수 있습니다. 헤더:', mh);
+    console.warn('[SM가져오기] 고객 식별번호 컬럼("고유번호"/"No"/"고객번호")을 찾지 못했습니다 — SM 고객번호가 보존되지 않고 새 번호(20000+)가 발급될 수 있습니다. 헤더:', mh);
   }
 
   masterRows.slice(1).forEach(r => {
@@ -9610,7 +9617,11 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
         if (nextCustNo < 20000) nextCustNo = 20000;
       } else {
         custNoParseFailCount++;
+        custNoParseFails.push({ name: cleanName, raw: smCustNo });
       }
+    } else {
+      custNoMissingCount++;
+      custNoMissingNames.push(cleanName);
     }
 
     // 이력 메모 custMemos에 추가 (custMemos는 앱 전체에서 이름→문자열 하나로 쓰임 — 배열 아님)
@@ -9680,7 +9691,11 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
   });
 
   if (custNoParseFailCount > 0) {
-    console.warn(`[SM가져오기] 고객번호 컬럼 값이 있는데 숫자로 안 읽힌 행 ${custNoParseFailCount}건 — 해당 고객은 SM 고객번호가 보존되지 않고 새 번호(20000+)가 발급될 수 있습니다.`);
+    console.warn(`[SM가져오기] 고객 식별번호 값이 있는데 숫자로 안 읽힌 행 ${custNoParseFailCount}건 — 해당 고객은 SM 고객번호가 보존되지 않고 새 번호(20000+)가 발급될 수 있습니다. 아래 표 참고.`);
+    console.table(custNoParseFails);
+  }
+  if (custNoMissingCount > 0) {
+    console.warn(`[SM가져오기] 고객 식별번호 컬럼 값이 아예 비어있는 행 ${custNoMissingCount}건 — 해당 고객은 SM 고객번호가 보존되지 않고 새 번호(20000+)가 발급될 수 있습니다.`, custNoMissingNames);
   }
 
   saveCustNumbers();
