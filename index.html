@@ -1875,7 +1875,7 @@ function showReferrerDrop(safeName, q) {
   const custMap = {};
   bookings.forEach(b=>{
     if(!b.name) return;
-    const distinguisher = b.phone ? b.phone.replace(/[^0-9]/g,'') : (b.customer_no ? 'no:'+b.customer_no : '');
+    const distinguisher = b.customer_no ? 'no:'+b.customer_no : (b.phone ? b.phone.replace(/[^0-9]/g,'') : '');
     const key = b.name + '|' + distinguisher;
     if(!custMap[key]) custMap[key] = {name:b.name, phone:'', customer_no:'', latestDate:'', latestProduct:''};
     const c = custMap[key];
@@ -3978,11 +3978,21 @@ function renderCustSearchPopup() {
       custs.push(buildCustEntry(name, bks, null));
       return;
     }
-    smIds.forEach(smId=>{
-      custs.push(buildCustEntry(name, bks.filter(b=>b.smmate && String(b.smmate_id)===smId), smId));
-    });
+    // 직접등록건도 customer_no가 기존 smmate_id와 일치하면(=이미 매칭된 SM 인물) 그 그룹으로 편입 —
+    // 배지가 'direct'(미확인)이 아니라 실제 번호(#16422)로 뜨게 됨. 일치 안 하는 것만 '미확인'.
     const directBks = bks.filter(b=>!b.smmate);
-    if (directBks.length) custs.push(buildCustEntry(name, directBks, 'direct'));
+    const matchedDirect = {};
+    const unmatchedDirect = [];
+    directBks.forEach(b=>{
+      const no = (b.customer_no!=null && b.customer_no!=='') ? String(b.customer_no) : '';
+      if (no && smIds.includes(no)) (matchedDirect[no] || (matchedDirect[no]=[])).push(b);
+      else unmatchedDirect.push(b);
+    });
+    smIds.forEach(smId=>{
+      const group = bks.filter(b=>b.smmate && String(b.smmate_id)===smId).concat(matchedDirect[smId]||[]);
+      custs.push(buildCustEntry(name, group, smId));
+    });
+    if (unmatchedDirect.length) custs.push(buildCustEntry(name, unmatchedDirect, 'direct'));
   });
 
   if(q) {
