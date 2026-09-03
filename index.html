@@ -2280,7 +2280,7 @@ async function loadFromSupabase() {
         merged.smmate_id = b.smmate_id;
         return merged;
       });
-      bookings = [...mergedImported, ...manualBks];
+      bookings = [...manualBks];
       // 직접 등록분은 manual_bookings(서버)가 신뢰 소스 — 로컬은 캐시로만 유지
       try { localStorage.setItem('gamtan_bookings', JSON.stringify(manualBks)); } catch(e) {}
       try { localStorage.setItem('gamtan_sm_edits', JSON.stringify(mergedImported.filter(b=>smHasLocalState(b)))); } catch(e) {}
@@ -3958,7 +3958,9 @@ function renderCustSearchPopup() {
   const q = (document.getElementById('cust-popup-input')?.value||'').trim();
   const qLow = q.toLowerCase();
 
-  // 이름별로 모으되, smmate_id가 2개 이상(동명이인)이면 smmate_id별 별도 항목으로 쪼갠다.
+  // 이름별로 모으되, customer_no가 2개 이상(동명이인)이면 customer_no별 별도 항목으로 쪼갠다.
+  // (예전엔 b.smmate_id로 쪼갰지만, schedules 유래 예약을 더는 안 쓰면서 smmate_id가 예약에 안 실림 —
+  //  대신 customer_no(SM 원본 고객번호, 20000 미만이면 실제 SM 인물 식별자)를 키로 쓴다.)
   // 동명이인 아닌 이름(대다수)은 기존과 동일하게 이름 하나 = 항목 하나.
   const byName = {};
   bookings.forEach(b=>{ if(!byName[b.name]) byName[b.name] = []; byName[b.name].push(b); });
@@ -3971,28 +3973,23 @@ function renderCustSearchPopup() {
     });
     return { name, phone, lastDate, count, smId: smId||null };
   };
+  function validCustNo(b) {
+    const n = Number(b.customer_no);
+    return (b.customer_no!=null && b.customer_no!=='' && Number.isFinite(n) && n > 0 && n < 20000) ? String(n) : '';
+  }
   let custs = [];
   Object.entries(byName).forEach(([name, bks])=>{
-    const smIds = [...new Set(bks.filter(b=>b.smmate && b.smmate_id!=null && b.smmate_id!=='').map(b=>String(b.smmate_id)))];
-    if (smIds.length <= 1) {
+    const custNos = [...new Set(bks.map(validCustNo).filter(Boolean))];
+    if (custNos.length <= 1) {
       custs.push(buildCustEntry(name, bks, null));
       return;
     }
-    // 직접등록건도 customer_no가 기존 smmate_id와 일치하면(=이미 매칭된 SM 인물) 그 그룹으로 편입 —
-    // 배지가 'direct'(미확인)이 아니라 실제 번호(#16422)로 뜨게 됨. 일치 안 하는 것만 '미확인'.
-    const directBks = bks.filter(b=>!b.smmate);
-    const matchedDirect = {};
-    const unmatchedDirect = [];
-    directBks.forEach(b=>{
-      const no = (b.customer_no!=null && b.customer_no!=='') ? String(b.customer_no) : '';
-      if (no && smIds.includes(no)) (matchedDirect[no] || (matchedDirect[no]=[])).push(b);
-      else unmatchedDirect.push(b);
+    custNos.forEach(no=>{
+      custs.push(buildCustEntry(name, bks.filter(b=>validCustNo(b)===no), no));
     });
-    smIds.forEach(smId=>{
-      const group = bks.filter(b=>b.smmate && String(b.smmate_id)===smId).concat(matchedDirect[smId]||[]);
-      custs.push(buildCustEntry(name, group, smId));
-    });
-    if (unmatchedDirect.length) custs.push(buildCustEntry(name, unmatchedDirect, 'direct'));
+    // customer_no가 없거나(20000 미만 유효번호 아님) 매칭 안 되는 건만 '미확인'
+    const unmatched = bks.filter(b=>!validCustNo(b));
+    if (unmatched.length) custs.push(buildCustEntry(name, unmatched, 'direct'));
   });
 
   if(q) {
@@ -4525,7 +4522,7 @@ function _refreshWorkBadges(bid, b) {
   const safeName = (b.name||'').replace(/'/g,"\'");
   const wc = b.workChecks||{};
   const goods = PRODUCT_GOODS[b.product]||PRODUCT_GOODS.story;
-  const amt2 = b.priceItems ? priceTotal(b) : 0;
+  const amt2 = (b.priceItems&&b.priceItems.length) ? priceTotal(b) : (b.payments?.total?Number(b.payments.total):0);
   const paid2 = b.payments ? paidTotal(b) : 0;
   const isFullyPaid = amt2 > 0 && paid2 >= amt2;
 
@@ -4726,7 +4723,7 @@ function getDynamicStatusLabelLegacy(b) {
     // 일반 상품 SM 건: SM이냐 직접등록이냐로 나누지 않는다.
     // '완결된 SM 씨앗'(완결 stage + 완납 + 앱에서 손 안 댐)만 legacy 완료로 두고,
     // 그 외(진행중·예약·미완납·앱에서 수정한 건)는 전부 5단계 규칙(computeProgress5)으로 통일 판정.
-    const amtTotal = b.priceItems ? priceTotal(b) : Number(b.payments?.total||0);
+    const amtTotal = (b.priceItems&&b.priceItems.length) ? priceTotal(b) : Number(b.payments?.total||0);
     const isFinishedSeed = b.smmate === true && stage >= 8 && paidTotal(b) >= amtTotal && b.smmate_price_override !== true;
     if(isFinishedSeed) return {label:'완료', color:'#15803d'};
     return getDynamicStatusLabel5(b);
@@ -7657,7 +7654,7 @@ async function fetchSmProfilesByIds(ids) {
 function buildDupSmPanel(name, distinctSmIds, profiles, allBks) {
   const rows = distinctSmIds.map(smId => {
     const p = profiles[smId] || {};
-    const bks = allBks.filter(b => b.smmate && String(b.smmate_id) === smId);
+    const bks = allBks.filter(b => Number(b.customer_no) === Number(smId));
     const last = bks[bks.length - 1];
     const custNoDisp = (Number(smId) > 0 && Number(smId) < 20000) ? `#${smId}` : '(고객번호 없음)';
     return `<div style="background:#fff;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;margin-top:6px">
@@ -7676,7 +7673,7 @@ function buildDupSmPanel(name, distinctSmIds, profiles, allBks) {
 // customers 원본(SM)과 고객번호(=smmate_id)는 여기서 절대 안 바꿈 — 표시만 함.
 function smKey(smmateId) { return 'sm_' + smmateId; }
 async function showCustDetailBySmId(name, smmateId) {
-  const allBks = bookings.filter(b => b.smmate && b.name===name && String(b.smmate_id)===String(smmateId))
+  const allBks = bookings.filter(b => b.name===name && Number(b.customer_no)===Number(smmateId))
     .sort((a,bb)=>a.date.localeCompare(bb.date)||a.time.localeCompare(bb.time));
   const profiles = await fetchSmProfilesByIds([smmateId]);
   const p = profiles[String(smmateId)] || {};
@@ -7709,7 +7706,7 @@ async function showCustDetailBySmId(name, smmateId) {
   selectedId = null;
 
   const totalVisits = allBks.length;
-  const totalSpent = allBks.reduce((s,b)=>s+(b.payments?.total?Number(b.payments.total):0),0);
+  const totalSpent = allBks.reduce((s,b)=>s+((b.priceItems&&b.priceItems.length)?priceTotal(b):(b.payments?.total?Number(b.payments.total):0)),0);
   const totalPaid  = allBks.reduce((s,b)=>s+(b.payments?paidTotal(b):0),0);
 
   const safeNameJs = name.replace(/'/g,"\\'");
@@ -7852,7 +7849,7 @@ function buildHistCardHtml(b, name, safeName, dispPhone) {
     const p = PRODUCTS[b.product]||PRODUCTS.story;
     const {label:stLabel,color:stColor} = getDynamicStatusLabel(b);
     const t = (parseInt(b.adults)||0)+(parseInt(b.kids)||0);
-    const amt = b.priceItems ? priceTotal(b) : 0;
+    const amt = (b.priceItems&&b.priceItems.length) ? priceTotal(b) : (b.payments?.total?Number(b.payments.total):0);
     const paid = b.payments ? paidTotal(b) : 0;
     const remain = Math.max(0,amt-paid);
     // postponeTag: 헤더에 직접 인라인 처리로 대체됨
@@ -7899,7 +7896,7 @@ function buildHistCardHtml(b, name, safeName, dispPhone) {
     const goods = PRODUCT_GOODS[b.product]||PRODUCT_GOODS.story;
     if(!b.extraItems) b.extraItems = {};
     const wc = b.workChecks||{};
-    const amt2 = b.priceItems ? priceTotal(b) : 0;
+    const amt2 = (b.priceItems&&b.priceItems.length) ? priceTotal(b) : (b.payments?.total?Number(b.payments.total):0);
     const paid2 = b.payments ? paidTotal(b) : 0;
     const isFullyPaidWork = amt2 > 0 && paid2 >= amt2;
     const hasDeposit = Number(b.payments?.deposit?.amt||0) > 0;
@@ -8203,8 +8200,11 @@ async function showCustDetail(name) {
   _lastCustName = name;
   const allBks = bookings.filter(b=>b.name===name).sort((a,bb)=>a.date.localeCompare(bb.date)||a.time.localeCompare(bb.time));
   if(!allBks.length) return;
-  // [재키잉 파일럿] 이 이름에 smmate_id가 2개 이상이면(동명이인) 원본 기준 분리 패널 준비
-  const _distinctSmIds = [...new Set(allBks.filter(b=>b.smmate && b.smmate_id!=null && b.smmate_id!=='').map(b=>String(b.smmate_id)))];
+  // [재키잉 파일럿] 이 이름에 customer_no(20000 미만 유효번호)가 2개 이상이면(동명이인) 원본 기준 분리 패널 준비
+  const _distinctSmIds = [...new Set(allBks.map(b=>{
+    const n = Number(b.customer_no);
+    return (b.customer_no!=null && b.customer_no!=='' && Number.isFinite(n) && n > 0 && n < 20000) ? String(n) : null;
+  }).filter(Boolean))];
   const dupSmPanelHtml = _distinctSmIds.length > 1
     ? buildDupSmPanel(name, _distinctSmIds, await fetchSmProfilesByIds(_distinctSmIds), allBks)
     : '';
@@ -8277,7 +8277,7 @@ async function showCustDetail(name) {
   // 통계 계산
   const custNo = getCustNo(name);
   const totalVisits = bks.length; // 실제 예약만 카운트
-  const totalSpent = bks.reduce((s,b)=>s+(b.priceItems?priceTotal(b):(b.smmate&&b.payments?.total?b.payments.total:0)),0);
+  const totalSpent = bks.reduce((s,b)=>s+((b.priceItems&&b.priceItems.length)?priceTotal(b):(b.payments?.total?Number(b.payments.total):0)),0);
   const totalPaid  = bks.reduce((s,b)=>s+(b.payments?paidTotal(b):0),0);
   const allPhone = allBks.map(x=>x.phone).filter(Boolean); // placeholder 포함해서 전화번호 수집
   const allEmail = allBks.map(x=>x.email).filter(Boolean);
@@ -8814,7 +8814,7 @@ function refreshHistAmt(bid, custName) {
 function refreshCustStats(custName) {
   const bks = bookings.filter(b=>b.name===custName);
   const key = custName.replace(/\s/g,'_');
-  const totalSpent  = bks.filter(b=>!b.cancelled&&!b.postponed).reduce((s,b)=>s+(b.priceItems?priceTotal(b):(b.smmate&&b.payments?.total?b.payments.total:0)),0);
+  const totalSpent  = bks.filter(b=>!b.cancelled&&!b.postponed).reduce((s,b)=>s+((b.priceItems&&b.priceItems.length)?priceTotal(b):(b.payments?.total?Number(b.payments.total):0)),0);
   const totalVisits = bks.filter(b=>!b.cancelled&&!b.postponed).length;
   const elV = document.getElementById('cust-stat-visits-'+key);
   const elS = document.getElementById('cust-stat-spent-'+key);
@@ -8825,7 +8825,7 @@ function refreshCustStats(custName) {
 // ── 히스토리 카드 금액 섹션 — 읽기 전용 요약 ──────────────────────
 function buildHistAmtHtml(b, safeName) {
   initPayments(b);
-  const amt    = b.priceItems ? priceTotal(b) : 0;
+  const amt    = (b.priceItems&&b.priceItems.length) ? priceTotal(b) : (b.payments?.total?Number(b.payments.total):0);
   const paid   = paidTotal(b);
   const remain = Math.max(0, amt - paid);
   const depAmt      = Number(b.payments?.deposit?.amt||0);
@@ -8914,7 +8914,7 @@ function histConfirmBalance(bid, custName) {
   const b = bookings.find(x=>x.id===bid);
   if(!b) return;
   initPayments(b);
-  const total  = priceTotal(b);
+  const total  = (b.priceItems && b.priceItems.length) ? priceTotal(b) : Number(b.payments?.total || 0);
   const remain = Math.max(0, total - paidTotal(b));
   if(remain <= 0) return;
   const nextId = ((b.payments.midterms||[]).reduce((mx,m)=>Math.max(mx,m.id),0))+1;
@@ -9013,7 +9013,7 @@ function renderGSearch() {
     const p = PRODUCTS[b.product]||PRODUCTS.story;
     const {label:stl,color:stc} = getDynamicStatusLabel(b);
     const t = (parseInt(b.adults)||0)+(parseInt(b.kids)||0);
-    const amt = b.priceItems ? priceTotal(b) : 0;
+    const amt = (b.priceItems&&b.priceItems.length) ? priceTotal(b) : (b.payments?.total?Number(b.payments.total):0);
     const postponeTag = b.postponed?`<span style="font-size:10px;background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;border-radius:5px;padding:1px 5px">📅 연기${b.postponedDate?' → '+fmtDateKo(b.postponedDate):''}</span>`:'';
     return `<div style="border:1px solid #e8e8e8;border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer;background:#fff"
       onclick="closeGSearch();selectCustFromPopup('${b.name.replace(/'/g,"\\'")}')">
@@ -9115,7 +9115,7 @@ function renderStats() {
   // 매출 대상: 가격항목이 있거나(직접입력·수정), SM 결제기록(payments.total)이 있는 예약
   const bks = bookings.filter(b =>
     (b.priceItems && b.priceItems.length > 0 && b.payments) ||
-    (b.smmate && b.payments && Number(b.payments.total) > 0)
+    (b.payments && Number(b.payments.total) > 0)
   );
 
   let sumTotal=0, sumPaid=0, sumPending=0, cntFull=0, cntPending=0;
@@ -9676,8 +9676,8 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
             + (totalAmt > 0 && idx===0 ? ' / 총액: ' + totalAmt.toLocaleString('ko-KR') + '원' : '')
             + (c.memo ? ' / ' + c.memo.slice(0,100) : ''),
           stage: c.state === '완료' ? 7 : 1,
-
-          payments: { deposit: { amt: idx===0 ? depositAmt : 0, method: '계좌이체' }, midterms: [] },
+          stageChecks: {}, priceItems: [],
+          payments: { total: idx===0 ? totalAmt : 0, deposit: { amt: idx===0 ? depositAmt : 0, method: '계좌이체' }, midterms: [] },
           smImport: true,
         });
         addedBooking++;
@@ -9694,7 +9694,7 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
             + (totalAmt > 0 ? ' / 총액: ' + totalAmt.toLocaleString('ko-KR') + '원' : '')
             + (memoTxt ? ' / ' + memoTxt.slice(0,100) : ''),
           stage: 1, stageChecks: {}, priceItems: [],
-          payments: { deposit: { amt: depositAmt, method: '계좌이체' }, midterms: [] },
+          payments: { total: totalAmt, deposit: { amt: depositAmt, method: '계좌이체' }, midterms: [] },
           smImport: true,
         });
         addedBooking++;
