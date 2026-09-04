@@ -1993,6 +1993,11 @@ function getCustNo(name) {
 // ===== Supabase 연동 =====
 // (초기화는 head에서 완료)
 let syncTimer = null;
+// ★ manual_bookings 서버에 마지막으로 올린 상태 스냅샷(id -> JSON 문자열)
+//   저장할 때 이걸로 diff해서 "바뀐 건만" upsert — 예약 1건 고쳐도 전체(1만건+)를 올리다 timeout(57014) 나던 문제 수정
+let _lastSyncedManualJSON = {};
+// ★ booking_state 서버에 마지막으로 올린 작업상태 스냅샷(booking_key -> JSON 문자열) — 위와 같은 이유로 diff 저장
+let _lastSyncedStateJSON = {};
 
 // 로그인
 async function doLogin() {
@@ -2281,6 +2286,9 @@ async function loadFromSupabase() {
         return merged;
       });
       bookings = [...manualBks];
+      // ★ 서버에서 방금 받아온 상태를 "마지막 동기화 스냅샷"으로 삼음 — 다음 저장 때 이 값과 다른 건만 올림
+      _lastSyncedManualJSON = {};
+      manualBks.forEach(b => { if (b.id) _lastSyncedManualJSON[b.id] = JSON.stringify(b); });
       // 직접 등록분은 manual_bookings(서버)가 신뢰 소스 — 로컬은 캐시로만 유지
       try { localStorage.setItem('gamtan_bookings', JSON.stringify(manualBks)); } catch(e) {}
       try { localStorage.setItem('gamtan_sm_edits', JSON.stringify(mergedImported.filter(b=>smHasLocalState(b)))); } catch(e) {}
@@ -2389,6 +2397,9 @@ async function loadFromSupabase() {
         // 병합 결과를 로컬 캐시에도 반영
         try { localStorage.setItem('gamtan_sm_edits', JSON.stringify(bookings.filter(b=>b.smmate && smHasLocalState(b)))); } catch(e) {}
       }
+      // ★ 서버에서 방금 받아온 작업상태를 "마지막 동기화 스냅샷"으로 삼음
+      _lastSyncedStateJSON = {};
+      stateRows.forEach(r => { if (r.booking_key) _lastSyncedStateJSON[r.booking_key] = JSON.stringify(r.state || {}); });
     } catch(e) { /* booking_state 테이블 미생성 — 무시 */ }
 
     // ★ 날짜 메모 Supabase에서 불러오기 (기기 간 공유) — date_memos 테이블 없으면 건너뜀
@@ -2595,24 +2606,34 @@ async function syncToSupabase() {
   try {
     // 손으로 넣은 예약(sm_ 아닌 것)만 manual_bookings 테이블에 저장
     // ★ id를 고정키로 upsert → 수정해도 중복 안 쌓임. 예약 객체 전체를 data(jsonb)에 보존
+    // ★ 마지막 동기화 스냅샷과 달라진 건(신규·수정)만 골라 올림 — 전체(1만건+)를 매번 올리면 statement timeout(57014) 남
     const newBks = bookings.filter(b => !b.smmate && b.id);
-    if (newBks.length > 0) {
-      const { error: mbErr } = await supa.from('manual_bookings').upsert(
-        newBks.map(b => ({
-          id: b.id,
-          data: b,
-          updated_at: new Date().toISOString(),
-        })),
-        { onConflict: 'id' }
-      );
-      // ★ 조용한 실패 제거 — 저장 거부되면 화면에 그대로 알림
-      if (mbErr) {
-        console.error('수동예약 저장 실패:', mbErr);
-        showSyncStatus('⚠️ 예약 저장 실패: ' + (mbErr.message || mbErr.code || ''));
-        alert('예약이 서버에 저장되지 않았어요.\n\n' + (mbErr.message || JSON.stringify(mbErr)) + '\n\n이 메시지를 캡처해서 알려주세요.');
-        return; // 실패했는데 '저장됨'으로 넘어가지 않도록 중단
+    const changedBks = newBks.filter(b => _lastSyncedManualJSON[b.id] !== JSON.stringify(b));
+    if (changedBks.length > 0) {
+      const BATCH = 200; // 그래도 한 번에 많이 바뀌었으면(가져오기 등) 배치로 나눠 올림
+      for (let i = 0; i < changedBks.length; i += BATCH) {
+        const chunk = changedBks.slice(i, i + BATCH);
+        const { error: mbErr } = await supa.from('manual_bookings').upsert(
+          chunk.map(b => ({
+            id: b.id,
+            data: b,
+            updated_at: new Date().toISOString(),
+          })),
+          { onConflict: 'id' }
+        );
+        // ★ 조용한 실패 제거 — 저장 거부되면 화면에 그대로 알림
+        if (mbErr) {
+          console.error('수동예약 저장 실패:', mbErr);
+          showSyncStatus('⚠️ 예약 저장 실패: ' + (mbErr.message || mbErr.code || ''));
+          alert('예약이 서버에 저장되지 않았어요.\n\n' + (mbErr.message || JSON.stringify(mbErr)) + '\n\n이 메시지를 캡처해서 알려주세요.');
+          return; // 실패했는데 '저장됨'으로 넘어가지 않도록 중단
+        }
+        chunk.forEach(b => { _lastSyncedManualJSON[b.id] = JSON.stringify(b); });
       }
     }
+    // ★ 로컬에서 사라진(삭제된) 건은 스냅샷에서도 정리 — 실제 서버 삭제는 deleteBooking/deleteBookingDirect가 그 건만 직접 처리함
+    const currentIds = new Set(newBks.map(b => b.id));
+    Object.keys(_lastSyncedManualJSON).forEach(id => { if (!currentIds.has(id)) delete _lastSyncedManualJSON[id]; });
     // ★ 작업 상태(완료/출고/출고연락/금액수정 등) Supabase 저장 — 기기 간 동기화
     // booking_state 테이블이 아직 없으면 조용히 건너뜀 (localStorage로 계속 동작)
     try {
@@ -2621,15 +2642,26 @@ async function syncToSupabase() {
       const byKey = {};
       edited.forEach(b => { byKey[bookingStateKey(b)] = b; });  // 뒤엣것이 이김
       const uniqueEdited = Object.values(byKey);
-      if (uniqueEdited.length > 0) {
-        await supa.from('booking_state').upsert(
-          uniqueEdited.map(b => ({
-            booking_key: bookingStateKey(b),
-            state: extractBookingState(b),
-            updated_at: new Date().toISOString(),
-          })),
-          { onConflict: 'booking_key' }
-        );
+      // ★ 마지막 동기화 스냅샷과 달라진 것만 올림 — 매번 편집된 예약 전체를 올리다 timeout 나던 것 방지
+      const changedEdited = uniqueEdited.filter(b => {
+        const key = bookingStateKey(b);
+        return _lastSyncedStateJSON[key] !== JSON.stringify(extractBookingState(b));
+      });
+      if (changedEdited.length > 0) {
+        const BATCH = 200;
+        for (let i = 0; i < changedEdited.length; i += BATCH) {
+          const chunk = changedEdited.slice(i, i + BATCH);
+          const { error: bsErr } = await supa.from('booking_state').upsert(
+            chunk.map(b => ({
+              booking_key: bookingStateKey(b),
+              state: extractBookingState(b),
+              updated_at: new Date().toISOString(),
+            })),
+            { onConflict: 'booking_key' }
+          );
+          if (bsErr) { console.error('작업상태 저장 실패:', bsErr); break; }
+          chunk.forEach(b => { _lastSyncedStateJSON[bookingStateKey(b)] = JSON.stringify(extractBookingState(b)); });
+        }
       }
     } catch(e) { /* booking_state 테이블 미생성 — 무시 */ }
     showSyncStatus('✅ 저장됨');
