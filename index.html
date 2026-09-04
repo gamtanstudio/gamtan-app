@@ -1989,6 +1989,22 @@ function getCustNo(name) {
   // 발급 완료 전 임시 표시 (곧 서버 번호로 갱신됨)
   return custNumbers[name] ? String(custNumbers[name]).padStart(5,'0') : '·····';
 }
+// ★ 같은 전화(숫자만)+같은 이름의 기존 예약이 있으면 그 고객번호를 물려받기 위한 조회.
+//   전화만 같고 이름 다르면(가족) 매칭 안 시킴 — 새 번호를 받아야 함.
+function findExistingCustNoByPhone(name, phoneDigits) {
+  if (!name || !phoneDigits) return null;
+  const match = bookings.find(b =>
+    !b._phonePlaceholder &&
+    b.name === name &&
+    b.phone &&
+    b.phone.replace(/[^0-9]/g,'') === phoneDigits
+  );
+  if (!match) return null;
+  const direct = Number(match.customer_no);
+  if (Number.isFinite(direct) && direct > 0) return direct;
+  const cached = Number(custNumbers[match.name]);
+  return (Number.isFinite(cached) && cached > 0) ? cached : null;
+}
 
 // ===== Supabase 연동 =====
 // (초기화는 head에서 완료)
@@ -6237,7 +6253,19 @@ function saveBooking() {
   } else {
     const newId = genId();
     const contractId = product==='growth' && contractYear===1 ? 'cid_'+newId : undefined;
-    bookings.push({id:newId,name,phone,email,familyNames,product,adults,kids,childName,date,time,hasKids,pet,weekend,postponedDate,snsConsent,idType,idWebFile,idPassportAdd,idIdCardAdd,currentStage:0,stageChecks:{},dateTbd,contractYears,contractYear,cohort,contractId});
+    const newBk = {id:newId,name,phone,email,familyNames,product,adults,kids,childName,date,time,hasKids,pet,weekend,postponedDate,snsConsent,idType,idWebFile,idPassportAdd,idIdCardAdd,currentStage:0,stageChecks:{},dateTbd,contractYears,contractYear,cohort,contractId};
+    // ★ 같은 전화(숫자만)+같은 이름의 기존 손님이면 새 번호 발급 대신 그 고객번호를 물려받음
+    //   (전화만 같고 이름 다르면 가족일 수 있으니 매칭 안 함 → 새 번호)
+    if (phone) {
+      const phoneDigits = phone.replace(/[^0-9]/g,'');
+      const inheritedNo = findExistingCustNoByPhone(name, phoneDigits);
+      if (inheritedNo) {
+        newBk.customer_no = inheritedNo;
+        custNumbers[name] = inheritedNo;
+        try { localStorage.setItem('gamtan_cust_numbers', JSON.stringify(custNumbers)); } catch(e) {}
+      }
+    }
+    bookings.push(newBk);
   }
   // ── 전화번호로 상담 기록 통합 ──────────────────────────────────────
   // 신규 예약 저장 시: 같은 전화번호의 _phonePlaceholder 고객이 있으면
