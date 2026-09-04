@@ -3323,7 +3323,7 @@ function smmatePriceOverride(bid) {
     renderSmBookingModalCard(bid);
   } else if(b.name) {
     // 이름 화면(showCustDetail)에서 호출된 경우엔 기존대로 전체 리렌더
-    showCustDetail(b.name);
+    showCustDetail(b.name, custGroupKey(b));
   }
 }
 function addMidterm(bid) {
@@ -3974,7 +3974,7 @@ function selectCustFromPopup(name, smId) {
   setTimeout(()=>{
     try {
       if (smId && smId !== 'direct') showCustDetailBySmId(name, smId);
-      else showCustDetail(name);
+      else showCustDetail(name, smId);
     } catch(e) { console.warn('showCustDetail error:', e); }
   }, 50);
 }
@@ -4324,7 +4324,7 @@ function renderGrowthAlerts() {
     const hasNext = bookings.some(x=>x.contractId===b.contractId&&(x.contractYear||1)===maxYr+1&&!x.cancelled);
     if(hasNext) { seen.add(b.contractId); return; }
     seen.add(b.contractId);
-    overdueList.push({name:latest.name, yr:maxYr, totalYrs, date:latest.date, id:latest.id, cohort:latest.cohort});
+    overdueList.push({name:latest.name, yr:maxYr, totalYrs, date:latest.date, id:latest.id, cohort:latest.cohort, key:custGroupKey(latest)});
   });
 
   // 3) 📞 출고연락 전 — 준비 다 끝났는데 아직 손님에게 연락 안 한 예약
@@ -4340,10 +4340,11 @@ function renderGrowthAlerts() {
       <div style="display:flex;flex-direction:column;gap:4px">
       ${contactList.map(b=>{
         const safeName = (b.name||'').replace(/'/g,"\\'");
+        const safeKey = custGroupKey(b).replace(/'/g,"\\'");
         const pd = PRODUCTS[b.product]?.name || '';
         return `<div style="display:flex;align-items:center;justify-content:space-between;background:#fff;border-radius:7px;padding:5px 9px;border:1px solid #fdba74">
           <span style="font-size:12px;color:#1a1a2e;font-weight:600">${escHtml(dispName(b.name))} <span style="color:#c2410c;font-size:11px">${pd}</span></span>
-          <button onclick="showCustDetail('${safeName}')" style="font-size:11px;background:#f97316;color:#fff;border:none;border-radius:6px;padding:3px 9px;cursor:pointer;font-weight:600">📞 연락하기</button>
+          <button onclick="showCustDetail('${safeName}','${safeKey}')" style="font-size:11px;background:#f97316;color:#fff;border:none;border-radius:6px;padding:3px 9px;cursor:pointer;font-weight:600">📞 연락하기</button>
         </div>`;
       }).join('')}
       </div>
@@ -4356,11 +4357,12 @@ function renderGrowthAlerts() {
       <div style="display:flex;flex-direction:column;gap:4px">
       ${tbdList.map(b=>{
         const safeName = b.name.replace(/'/g,"\\'");
+        const safeKey = custGroupKey(b).replace(/'/g,"\\'");
         const curYr = b.contractYear||1;
         const totalYrs = b.contractYears||5;
         return `<div style="display:flex;align-items:center;justify-content:space-between;background:#fff;border-radius:7px;padding:5px 9px;border:1px solid #f9a8d4">
           <span style="font-size:12px;color:#1a1a2e;font-weight:600">${escHtml(dispName(b.name))} <span style="color:#be185d;font-size:11px">${b.cohort?b.cohort+'-'+curYr+'회차 · ':''}${totalYrs}년 계약·${curYr}년차</span></span>
-          <button onclick="showCustDetail('${safeName}')" style="font-size:11px;background:#db2777;color:#fff;border:none;border-radius:6px;padding:3px 9px;cursor:pointer;font-weight:600">📅 날짜 확정</button>
+          <button onclick="showCustDetail('${safeName}','${safeKey}')" style="font-size:11px;background:#db2777;color:#fff;border:none;border-radius:6px;padding:3px 9px;cursor:pointer;font-weight:600">📅 날짜 확정</button>
         </div>`;
       }).join('')}
       </div>
@@ -4373,9 +4375,10 @@ function renderGrowthAlerts() {
       <div style="display:flex;flex-direction:column;gap:4px">
       ${overdueList.map(item=>{
         const safeName = item.name.replace(/'/g,"\\'");
+        const safeKey = (item.key||'').replace(/'/g,"\\'");
         return `<div style="display:flex;align-items:center;justify-content:space-between;background:#fff;border-radius:7px;padding:5px 9px;border:1px solid #fed7aa">
           <span style="font-size:12px;color:#1a1a2e;font-weight:600">${escHtml(dispName(item.name))} <span style="color:#c2410c;font-size:11px">${item.cohort?item.cohort+'-'+item.yr+'회차 · ':''}${item.totalYrs}년 계약·${item.yr}년차 완료 (${fmtDateKo(item.date)})</span></span>
-          <button onclick="showCustDetail('${safeName}')" style="font-size:11px;background:#f97316;color:#fff;border:none;border-radius:6px;padding:3px 9px;cursor:pointer;font-weight:600">➕ 예약 추가</button>
+          <button onclick="showCustDetail('${safeName}','${safeKey}')" style="font-size:11px;background:#f97316;color:#fff;border:none;border-radius:6px;padding:3px 9px;cursor:pointer;font-weight:600">➕ 예약 추가</button>
         </div>`;
       }).join('')}
       </div>
@@ -5211,8 +5214,9 @@ function renderListByCust(el) {
     ].filter(Boolean).join('');
     const infoBar = infoItems ? `<div class="cust-info-bar">${infoItems}</div>` : '';
     const thumbRow = buildCustThumbs(name, encName);
+    const safeGroupKey = custGroupKey(bks[0]).replace(/'/g,"\\'");
     return `<div class="cust-group">
-      <div class="cust-group-header${hasActive?' active-cust':''}" onclick="showCustDetail('${safeName}')" style="display:flex;align-items:center;gap:8px;padding:10px 14px;min-width:0">
+      <div class="cust-group-header${hasActive?' active-cust':''}" onclick="showCustDetail('${safeName}','${safeGroupKey}')" style="display:flex;align-items:center;gap:8px;padding:10px 14px;min-width:0">
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:6px;min-width:0">
             <span style="font-size:15px;font-weight:700;color:#222;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</span>
@@ -5303,7 +5307,7 @@ function subCard(b) {
   const memoRow = b.memo&&b.memo.trim() ? `<div class="sub-memo">📝 ${escHtml(b.memo.length>32?b.memo.substring(0,32)+'…':b.memo)}</div>` : '';
   const unpaidSub = isUnpaid(b);
   const progressBadgeSub = getProgressBadge(b);
-  return `<div class="sub-card${b.id===selectedId?' active':''}" onclick="currentView==='cust'?showCustDetail('${safeName}'):selectBooking('${b.id}')" style="${(memoRow?'align-items:flex-start;padding-top:10px;':'') + (unpaidSub?'background:#fff8f8;border-left:3px solid #fca5a5;':'')}">
+  return `<div class="sub-card${b.id===selectedId?' active':''}" onclick="currentView==='cust'?showCustDetail('${safeName}','${custGroupKey(b)}'):selectBooking('${b.id}')" style="${(memoRow?'align-items:flex-start;padding-top:10px;':'') + (unpaidSub?'background:#fff8f8;border-left:3px solid #fca5a5;':'')}">
     <div style="min-width:58px;flex-shrink:0">
       <div class="sub-date">${dateStr}</div>
       <div style="font-size:10px;color:${stageColor};font-weight:600;margin-top:1px">${stageLabel}</div>
@@ -6534,7 +6538,7 @@ async function renameCustomer(oldName, newName){
   saveBookings();
   addCustLog(newName, '고객 이름 변경: '+oldName+' → '+newName);
   _lastCustName=null;
-  showCustDetail(newName);
+  showCustDetail(newName, custGroupKey(custBks[0]));
 }
 
 // ====================== 월간 캘린더 ======================
@@ -8261,13 +8265,29 @@ function buildHistCardHtml(b, name, safeName, dispPhone) {
       </div>
     </div>`;
 }
-async function showCustDetail(name) {
+async function showCustDetail(name, groupKey) {
   // ★ 같은 고객을 저장·갱신 후 다시 그리는 경우 스크롤 위치 유지 (다른 고객 열 땐 맨 위)
   const _cdSame = (_lastCustName === name);
   const _cdRightEl = document.getElementById('right');
   const _cdScroll = (_cdSame && _cdRightEl) ? _cdRightEl.scrollTop : 0;
   _lastCustName = name;
-  const allBks = bookings.filter(b=>b.name===name).sort((a,bb)=>a.date.localeCompare(bb.date)||a.time.localeCompare(bb.time));
+  // ★ groupKey(customer_no 기반)가 있으면 이름 대신 그걸로 예약을 묶는다 —
+  //   이름에 "(모니터스케줄)" 같은 꼬리표가 붙어도, 또는 동명이인이 있어도 안 섞이게.
+  let _key = groupKey;
+  if (_key != null && _key !== '') {
+    _key = String(_key);
+    if (/^\d+$/.test(_key)) _key = 'no:' + Number(_key);   // 숫자만 오면 no:붙임
+  } else { _key = null; }
+  if (!_key) {
+    // 인자 없이 왔으면: 그 이름의 예약들이 모두 같은 고객번호 하나면 그걸 사용
+    const _named = bookings.filter(b => b.name === name);
+    const _ks = [...new Set(_named.map(b => custGroupKey(b)))];
+    if (_ks.length === 1 && _ks[0].indexOf('no:') === 0) _key = _ks[0];
+  }
+  const allBks = (_key
+      ? bookings.filter(b => custGroupKey(b) === _key)
+      : bookings.filter(b => b.name === name)
+    ).sort((a,bb)=>a.date.localeCompare(bb.date)||a.time.localeCompare(bb.time));
   if(!allBks.length) return;
   // [재키잉 파일럿] 이 이름에 customer_no(20000 미만 유효번호)가 2개 이상이면(동명이인) 원본 기준 분리 패널 준비
   const _distinctSmIds = [...new Set(allBks.map(b=>{
@@ -8577,8 +8597,7 @@ function cancelBooking(bid, custName) {
   b.cancelledAt = new Date().toISOString().slice(0,10);
   saveBookings();
   addCustLog(custName, `예약 취소 — ${fmtDateKo(b.date)} ${fmtTimePlain(b.time)} ${(PRODUCTS[b.product]||PRODUCTS.story).name}`);
-  // TODO(2차): smmate_id 스코프 유지 필요 — 모달에서 호출되면 이름 병합 화면(showCustDetail)으로 튕김
-  showCustDetail(custName);
+  showCustDetail(custName, custGroupKey(b));
 }
 function uncancelBooking(bid, custName) {
   const b = bookings.find(x=>x.id===bid);
@@ -8587,8 +8606,7 @@ function uncancelBooking(bid, custName) {
   b.cancelledAt = '';
   saveBookings();
   addCustLog(custName, `예약 취소 해제 — ${fmtDateKo(b.date)} ${fmtTimePlain(b.time)}`);
-  // TODO(2차): smmate_id 스코프 유지 필요 — 모달에서 호출되면 이름 병합 화면(showCustDetail)으로 튕김
-  showCustDetail(custName);
+  showCustDetail(custName, custGroupKey(b));
 }
 
 // ── 연기 기능 ──
@@ -8621,8 +8639,7 @@ function confirmPostpone() {
     : '예약 연기 — ' + fmtDateKo(b.date) + ' (날짜 미정)';
   addCustLog(custName, logMsg);
   closePostponeModal();
-  // TODO(2차): smmate_id 스코프 유지 필요 — 모달에서 호출되면 이름 병합 화면(showCustDetail)으로 튕김
-  showCustDetail(custName);
+  showCustDetail(custName, custGroupKey(b));
 }
 function unpostponeBooking(bid, custName) {
   const b = bookings.find(x=>x.id===bid);
@@ -8632,8 +8649,7 @@ function unpostponeBooking(bid, custName) {
   b.postponedDate = '';
   saveBookings();
   addCustLog(custName, '연기 해제 — ' + fmtDateKo(b.date) + '로 복원');
-  // TODO(2차): smmate_id 스코프 유지 필요 — 모달에서 호출되면 이름 병합 화면(showCustDetail)으로 튕김
-  showCustDetail(custName);
+  showCustDetail(custName, custGroupKey(b));
 }
 
 // ─── 가족성장 계약 함수들 ──────────────────────────────────────────
@@ -8649,8 +8665,7 @@ function setGrowthCohort(bid, custName, val) {
     b.cohort = cohort;
   }
   saveBookings();
-  // TODO(2차): smmate_id 스코프 유지 필요 — 모달에서 호출되면 이름 병합 화면(showCustDetail)으로 튕김
-  showCustDetail(custName);
+  showCustDetail(custName, custGroupKey(b));
 }
 
 // 년차 지정 (이 예약 레코드에만 적용 — 같은 계약이라도 연차는 예약마다 다름)
@@ -8660,8 +8675,7 @@ function setGrowthYear(bid, custName, val) {
   const parsed = parseInt(val);
   b.contractYear = (val==='' || isNaN(parsed) || parsed<1) ? null : parsed;
   saveBookings();
-  // TODO(2차): smmate_id 스코프 유지 필요 — 모달에서 호출되면 이름 병합 화면(showCustDetail)으로 튕김
-  showCustDetail(custName);
+  showCustDetail(custName, custGroupKey(b));
 }
 
 // 날짜 미정 → 날짜 확정 (수정 모달 열기 + dateTbd 체크 해제)
@@ -8684,8 +8698,7 @@ function moveToPostponedDate(bid, custName) {
   b.postponedDate = '';
   saveBookings();
   addCustLog(custName, '연기 날짜 확정 이동 — ' + fmtDateKo(oldDate) + ' → ' + fmtDateKo(newDate));
-  // TODO(2차): smmate_id 스코프 유지 필요 — 모달에서 호출되면 이름 병합 화면(showCustDetail)으로 튕김
-  showCustDetail(custName);
+  showCustDetail(custName, custGroupKey(b));
 }
 
 function toggleHistDetail(bid) {
