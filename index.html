@@ -8574,7 +8574,15 @@ async function showCustDetail(name, groupKey) {
         <button onclick="addBookingForCustomer(event,'${safeName}','${safeGroupKey}')"
           style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer">＋ 예약 추가하기</button>
       </div>` : '';
-  const historyHtml = bks.length === 0 ? noHistHtml : [...bks].reverse().map(b=>buildHistCardHtml(b, name, safeName, dispPhone)).join('');
+  // ★ 방문 히스토리 표시 순서: 날짜미정(date 빈 것)을 맨 위로, 그다음 날짜 있는 예약을 최신순(내림차순, 같으면 time 내림차순)으로.
+  //   allBks 자체의 오름차순 정렬(latestB/allPhone 등 다른 계산이 기대는 순서)은 그대로 두고, 여기 표시용으로만 따로 정렬.
+  const historyOrder = [...bks].sort((a,b2)=>{
+    const aTbd = !a.date, bTbd = !b2.date;
+    if(aTbd !== bTbd) return aTbd ? -1 : 1;
+    if(aTbd) return 0;
+    return b2.date.localeCompare(a.date) || b2.time.localeCompare(a.time);
+  });
+  const historyHtml = bks.length === 0 ? noHistHtml : historyOrder.map(b=>buildHistCardHtml(b, name, safeName, dispPhone)).join('');
 
   wf.innerHTML = `
     ${dupSmPanelHtml}
