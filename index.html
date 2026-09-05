@@ -6313,7 +6313,9 @@ function saveBooking() {
   }
 
   // ── 동명이인 체크 (신규 예약만) ──────────────────────────────────────
-  if(!editId && name && phone) {
+  // ★ 고객번호(regCustNo)가 유효하게 채워져 있으면 이 손님이 누구인지 이미 명확하므로 건너뜀.
+  //   (이름만 겹치는 다른 손님과 헷갈릴 일이 없음 — 고객번호가 비어 있을 때만 이름으로 물어봄)
+  if(!editId && !regCustNo && name && phone) {
     const phoneDigits = phone.replace(/[^0-9]/g,'');
     // 같은 이름인데 전화번호가 다른 기존 고객이 있는지 확인
     const sameNameDiffPhone = bookings.filter(b =>
