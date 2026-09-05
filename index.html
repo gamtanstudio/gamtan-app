@@ -5276,7 +5276,7 @@ function renderListByCust(el) {
         ${realBks.length>0
           ? `<span style="font-size:11px;background:#6366f1;color:#fff;border-radius:12px;padding:2px 8px;font-weight:700;white-space:nowrap;flex-shrink:0">${realBks.length}회</span>`
           : `<span style="font-size:11px;background:#16a34a;color:#fff;border-radius:12px;padding:2px 8px;font-weight:700;white-space:nowrap;flex-shrink:0">📞 전화</span>`}
-        <button onclick="addBookingForCustomer(event,'${safeName}')" style="font-size:11px;background:#6366f1;color:#fff;border:none;border-radius:7px;padding:4px 10px;cursor:pointer;font-weight:700;white-space:nowrap;flex-shrink:0">＋ 예약</button>
+        <button onclick="addBookingForCustomer(event,'${safeName}','${safeGroupKey}')" style="font-size:11px;background:#6366f1;color:#fff;border:none;border-radius:7px;padding:4px 10px;cursor:pointer;font-weight:700;white-space:nowrap;flex-shrink:0">＋ 예약</button>
       </div>
       <div class="cust-group-body${isOpen?' open':''}" id="cgbody-${encName}">
         <div class="cust-summary" style="${(memoEntries.length||realBks.length===0)?'border-bottom:none':'border-bottom:1px solid #f0f0f0'}">
@@ -5294,18 +5294,28 @@ function renderListByCust(el) {
   }).join('');
 }
 
-function addBookingForCustomer(e, name) {
+function addBookingForCustomer(e, name, groupKey) {
   e.stopPropagation();
   openAddModal();
   setTimeout(()=>{
     document.getElementById('f-name').value = name;
-    // 기존 고객의 전화번호/가족이름 자동 채우기
-    const existing = bookings.filter(b=>b.name===name).sort((a,b)=>b.date.localeCompare(a.date));
+    // 기존 고객의 전화번호/가족이름/고객번호 자동 채우기 (groupKey 있으면 그 그룹만, 없으면 이름 폴백)
+    const myBks = groupKey
+      ? bookings.filter(b => custGroupKey(b) === groupKey)
+      : bookings.filter(b=>b.name===name);
+    const existing = [...myBks].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
     if(existing.length) {
-      const latest = existing[0];
+      const latest = existing[existing.length-1];
       if(latest.phone) { const _fp=document.getElementById('f-phone'); _fp.value=latest.phone; formatPhoneInput(_fp); }
       if(latest.email) document.getElementById('f-email').value = latest.email;
       if(latest.familyNames) document.getElementById('f-familynames').value = latest.familyNames;
+    }
+    const inheritedNo = groupKey && groupKey.indexOf('no:') === 0
+      ? Number(groupKey.slice(3))
+      : (Number(myBks.find(b => Number(b.customer_no) > 0)?.customer_no) || null);
+    if(inheritedNo) {
+      const cnEl = document.getElementById('f-custno');
+      if(cnEl) cnEl.value = inheritedNo;
     }
     hideCustomerDrop();
   }, 50);
@@ -6081,17 +6091,29 @@ function onIdTypeChange() {
   });
 }
 
-function openAddBookingForCust(safeName, name) {
+function openAddBookingForCust(safeName, name, groupKey) {
   // 기존 예약 추가 모달 열기
   openAddModal();
   // 고객 이름 자동 입력
   const nameEl = document.getElementById('f-name');
   if(nameEl) { nameEl.value = name; nameEl.dispatchEvent(new Event('input')); }
-  // 전화번호 자동 입력 (customers에서 검색)
-  const cust = customers.find(c => c.name === name || c.name === safeName);
-  if(cust && cust.phone) {
+  // ★ 이 손님 그룹(customer_no 기준)의 예약에서 전화번호·고객번호를 상속.
+  //   (예전엔 customers.find(c=>c.name===...)로 찾았는데 customers가 이름 문자열 배열이라
+  //   c.name이 항상 undefined — 전화도 고객번호도 절대 안 채워지던 버그)
+  const myBks = groupKey
+    ? bookings.filter(b => custGroupKey(b) === groupKey)
+    : bookings.filter(b => b.name === name || b.name === safeName);
+  const latest = [...myBks].sort((a,b)=>(a.date||'').localeCompare(b.date||''))[myBks.length-1];
+  if(latest && latest.phone) {
     const phoneEl = document.getElementById('f-phone');
-    if(phoneEl) { phoneEl.value = cust.phone; formatPhoneInput(phoneEl); }
+    if(phoneEl) { phoneEl.value = latest.phone; formatPhoneInput(phoneEl); }
+  }
+  const inheritedNo = groupKey && groupKey.indexOf('no:') === 0
+    ? Number(groupKey.slice(3))
+    : (Number(myBks.find(b => Number(b.customer_no) > 0)?.customer_no) || null);
+  if(inheritedNo) {
+    const cnEl = document.getElementById('f-custno');
+    if(cnEl) cnEl.value = inheritedNo;
   }
   // 이름 입력 후 칩 업데이트
   updateCustomerChips();
@@ -6277,7 +6299,10 @@ function saveBooking() {
         const cnEl = document.getElementById('f-custno'); if(cnEl) cnEl.focus();
         return;
       }
-      const cnConflict = bookings.find(b => Number(b.customer_no) === regCustNo);
+      // ★ 같은 이름(=이 손님 자신)의 기존 예약은 충돌로 치지 않음 — 고객 상세에서 "+예약추가"로
+      //   열면 그 손님 자신의 번호가 미리 채워지는데, 그걸 그대로 저장할 때 자기 번호와 충돌났다고
+      //   막아버리던 버그 수정. 다른 이름이 이미 쓰고 있을 때만 진짜 충돌.
+      const cnConflict = bookings.find(b => Number(b.customer_no) === regCustNo && b.name !== name);
       if(cnConflict) {
         const ownerName = pickGroupDisplayName(bookings.filter(b => custGroupKey(b) === custGroupKey(cnConflict)));
         alert('이 번호(' + regCustNo + ')는 이미 ' + dispName(ownerName) + '님이 쓰고 있어요. 다른 번호를 입력하세요.');
@@ -8544,7 +8569,7 @@ async function showCustDetail(name, groupKey) {
         <div style="font-size:28px;margin-bottom:8px">📞</div>
         <div style="font-weight:700;color:#16a34a;margin-bottom:4px">전화 상담 고객으로 등록됨</div>
         <div style="font-size:12px;color:#6b7280;margin-bottom:12px">${dispPhone ? '📱 '+dispPhone : '전화번호 없음'}</div>
-        <button onclick="addBookingForCustomer(event,'${safeName}')"
+        <button onclick="addBookingForCustomer(event,'${safeName}','${safeGroupKey}')"
           style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer">＋ 예약 추가하기</button>
       </div>` : '';
   const historyHtml = bks.length === 0 ? noHistHtml : [...bks].reverse().map(b=>buildHistCardHtml(b, name, safeName, dispPhone)).join('');
@@ -8718,7 +8743,7 @@ async function showCustDetail(name, groupKey) {
     <div style="padding:12px 14px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
         <div style="font-size:14px;font-weight:700;color:#333;flex:1">📋 방문 히스토리 <span style="font-size:12px;font-weight:400;color:#888">(날짜 클릭 → 상세 보기)</span></div>
-        <button onclick="openAddBookingForCust('${safeName}','${escHtml(name)}')"
+        <button onclick="openAddBookingForCust('${safeName}','${escHtml(name)}','${safeGroupKey}')"
           style="background:#6366f1;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;font-weight:700;white-space:nowrap">+ 예약 추가</button>
       </div>
       ${historyHtml || '<div style="color:#bbb;text-align:center;padding:20px">방문 기록 없음</div>'}
