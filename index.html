@@ -2079,11 +2079,12 @@ async function onLoginSuccess(user) {
   loadFromSupabase().then(() => {
     // 추천인 클릭으로 새 탭이 ?cust=이름 으로 열렸으면 해당 고객 카드 자동 열기
     const _cp = new URLSearchParams(location.search).get('cust');
+    const _cpKey = new URLSearchParams(location.search).get('custKey');
     if (_cp) {
       setTimeout(() => {
         try {
           if (currentView !== 'cust') setView('cust');
-          showCustDetail(decodeURIComponent(_cp));
+          showCustDetail(decodeURIComponent(_cp), _cpKey ? decodeURIComponent(_cpKey) : undefined);
           const el = document.querySelector(`[data-cust-group="${CSS.escape(decodeURIComponent(_cp))}"]`);
           if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         } catch(e) {}
@@ -2094,7 +2095,8 @@ async function onLoginSuccess(user) {
     // ★ 로그인 후 서버에서 고객 카드 사진 불러오기
     loadAllPhotosToCache().then(()=>{
       const cn = localStorage.getItem('gamtan_cust_detail');
-      if (currentView === 'cust' && cn) { try { showCustDetail(cn); } catch(e){} }
+      const ck = localStorage.getItem('gamtan_cust_detail_key');
+      if (currentView === 'cust' && cn) { try { showCustDetail(cn, ck || undefined); } catch(e){} }
     });
   });
 }
@@ -2152,7 +2154,8 @@ async function _rtDoPhotos() {
   const st = right ? right.scrollTop : 0;
   await loadAllPhotosToCache();
   const cn = localStorage.getItem('gamtan_cust_detail');
-  if (currentView === 'cust' && cn) { try { showCustDetail(cn); } catch(e){} }
+  const ck = localStorage.getItem('gamtan_cust_detail_key');
+  if (currentView === 'cust' && cn) { try { showCustDetail(cn, ck || undefined); } catch(e){} }
   requestAnimationFrame(() => { const r2 = document.getElementById('right'); if (r2 && st) r2.scrollTop = st; });
 }
 function setupRealtimeSync() {
@@ -2605,7 +2608,8 @@ async function loadFromSupabase() {
         if (typeof renderList === 'function') renderList();
         if (v === 'cust') {
           const cn = localStorage.getItem('gamtan_cust_detail');
-          if (cn) setTimeout(()=>{ try{ showCustDetail(cn); }catch(e){} }, 30);
+          const ck = localStorage.getItem('gamtan_cust_detail_key');
+          if (cn) setTimeout(()=>{ try{ showCustDetail(cn, ck || undefined); }catch(e){} }, 30);
         }
       }
     } else {
@@ -4267,7 +4271,7 @@ function doRegNewCust(name, phone, memo, custNo) {
   addCustLog(name, logText);
   selectCustFromPopup(name);
   // 로그 저장 후 고객 카드 재렌더링
-  setTimeout(()=>{ try{ showCustDetail(name); }catch(e){} }, 120);
+  setTimeout(()=>{ try{ showCustDetail(name, newBk.customer_no ? ('no:'+newBk.customer_no) : undefined); }catch(e){} }, 120);
 }
 
 // 현재 뷰/날짜/선택 상태 유지하면서 데이터만 다시 불러오기
@@ -4478,7 +4482,7 @@ function applyNavState(state) {
   _historyPushing = true;
   try {
     if(state.view === 'cust' && state.custName) {
-      _applyView('cust', state.custName, null);
+      _applyView('cust', state.custName, null, state.custKey);
     } else if(state.bookingId) {
       _applyView(state.view || 'date', null, state.bookingId);
     } else {
@@ -4489,7 +4493,7 @@ function applyNavState(state) {
   }
 }
 
-function _applyView(v, custName, bookingId) {
+function _applyView(v, custName, bookingId, custKey) {
   currentView = v;
   localStorage.setItem('gamtan_view', v);
   sessionStorage.setItem('gamtan_cal_pos', JSON.stringify({y:calYear,m:calMonth,d:selectedCalDate}));
@@ -4502,7 +4506,7 @@ function _applyView(v, custName, bookingId) {
     renderMonthCal();
   } else if(custName) {
     renderList();
-      setTimeout(()=>{ try{ showCustDetail(custName); }catch(e){} }, 30);
+      setTimeout(()=>{ try{ showCustDetail(custName, custKey || undefined); }catch(e){} }, 30);
   } else if(bookingId) {
     selectedId = bookingId;
     renderList();
@@ -7750,9 +7754,15 @@ document.getElementById('today-label').textContent = fmtDateKo(new Date().toISOS
   const savedView     = localStorage.getItem('gamtan_view') || 'month';
   const savedSelId    = localStorage.getItem('gamtan_selected_id');
   const savedCustName = localStorage.getItem('gamtan_cust_detail');
+  const savedCustKey  = localStorage.getItem('gamtan_cust_detail_key'); // 없으면(옛날 저장) 이름만으로 폴백
 
   // 초기 상태를 history에 심기 (뒤로가기 기준점) — 복원할 뷰로 심어야 새로고침 후 뒤로가기가 정상 동작
-  history.replaceState({ view: savedView }, '');
+  history.replaceState(
+    savedView === 'cust' && savedCustName
+      ? { view: savedView, custName: savedCustName, custKey: savedCustKey || undefined }
+      : { view: savedView },
+    ''
+  );
 
   // cust 뷰는 setView 대신 직접 처리 (setView가 renderList를 너무 일찍 호출하는 문제 방지)
   if(savedView === 'cust') {
@@ -7763,7 +7773,7 @@ document.getElementById('today-label').textContent = fmtDateKo(new Date().toISOS
 
   if(savedView === 'cust' && savedCustName) {
     setTimeout(()=>{
-      showCustDetail(savedCustName);
+      showCustDetail(savedCustName, savedCustKey || undefined);
       const el = document.querySelector(`[data-cust-group="${CSS.escape(savedCustName)}"]`);
       if(el) el.scrollIntoView({block:'center'});
     }, 50);
@@ -7809,19 +7819,24 @@ function closeWfModal() {
   selectedId = null;
   // 고객카드 히스토리에서 열었으면 해당 고객카드로 복귀
   if(_custDetailName) {
-    showCustDetail(_custDetailName);
+    showCustDetail(_custDetailName, _custDetailGroupKey || undefined);
   }
 }
 
 // ====================== 고객카드 상세 히스토리 ======================
 let _custDetailName = '';    // 현재 열린 고객 이름 (인라인 토글용)
+let _custDetailGroupKey = ''; // 현재 열린 고객의 custGroupKey — 모달닫기 등으로 재표시할 때 동명이인 안 섞이게
 let _editFromWfModalBid = ''; // 수정 모달이 wf-modal에서 열렸을 때 복귀용 bid
 
 // 어느 뷰에서 호출해도 고객카드로 이동
-function goToCust(name) {
+// ※ key(custGroupKey)를 모르는 호출부(추천인 검색 등, 이름 문자열만 있음)는 생략 가능 —
+//   그 경우 onLoginSuccess의 안전장치(showCustDetail의 최신그룹 선택)로 병합만은 막는다.
+function goToCust(name, key) {
   if(!name) return;
   // 같은 브라우저에서 새 탭으로 그 고객 카드 열기 (?cust=이름 → onLoginSuccess에서 자동 열림)
-  window.open(location.pathname + '?cust=' + encodeURIComponent(name), '_blank');
+  let url = location.pathname + '?cust=' + encodeURIComponent(name);
+  if(key) url += '&custKey=' + encodeURIComponent(key);
+  window.open(url, '_blank');
 }
 
 // ── [재키잉 파일럿] SM 동명이인 분리 검증용 ──────────────────────────
@@ -7875,6 +7890,7 @@ async function showCustDetailBySmId(name, smmateId) {
 
   _lastCustName = name + '::sm:' + smmateId;
   _custDetailName = name;
+  _custDetailGroupKey = 'no:' + Number(smmateId);
   localStorage.setItem('gamtan_view', 'cust');
 
   const right = document.getElementById('right');
@@ -8393,16 +8409,27 @@ async function showCustDetail(name, groupKey) {
     if (/^\d+$/.test(_key)) _key = 'no:' + Number(_key);   // 숫자만 오면 no:붙임
   } else { _key = null; }
   if (!_key) {
-    // 인자 없이 왔으면: 그 이름의 예약들이 모두 같은 고객번호 하나면 그걸 사용
+    // 인자 없이 왔으면: 그 이름의 예약들을 그룹(custGroupKey) 별로 나눠본다.
+    // 그룹이 하나면 그대로 쓰고, 여러 개(동명이인)면 ★ 절대 합치지 않고
+    // 그 이름 예약 중 가장 최근(date 최신) 예약이 속한 그룹 한 명만 선택한다.
     const _named = bookings.filter(b => b.name === name);
     const _ks = [...new Set(_named.map(b => custGroupKey(b)))];
-    if (_ks.length === 1 && _ks[0].indexOf('no:') === 0) _key = _ks[0];
+    if (_ks.length === 1) {
+      _key = _ks[0];
+    } else if (_ks.length > 1) {
+      const _latest = [..._named].sort((a,b2)=>(a.date||'').localeCompare(b2.date||'')||(a.time||'').localeCompare(b2.time||''))[_named.length-1];
+      _key = custGroupKey(_latest);
+    }
   }
   const allBks = (_key
       ? bookings.filter(b => custGroupKey(b) === _key)
       : bookings.filter(b => b.name === name)
     ).sort((a,bb)=>a.date.localeCompare(bb.date)||a.time.localeCompare(bb.time));
   if(!allBks.length) return;
+  // ★ 이 함수 안에서 확정된 대표 groupKey — 상세 열림 상태를 저장/복원하는 모든 곳이 이걸 같이 저장해야
+  //   새로고침·뒤로가기·모달닫기 후에도 동명이인이 한 명으로 섞이지 않는다.
+  const curGroupKey = _key || custGroupKey(allBks[0]);
+  const safeGroupKey = curGroupKey.replace(/'/g,"\\'");
   // [재키잉 파일럿] 이 이름에 customer_no(양의 정수 유효번호)가 2개 이상이면(동명이인) 원본 기준 분리 패널 준비
   const _distinctSmIds = [...new Set(allBks.map(b=>{
     const k = custGroupKey(b);
@@ -8456,9 +8483,11 @@ async function showCustDetail(name, groupKey) {
   const bks = allBks.filter(b=>!b._phonePlaceholder);
   // 전화번호는 모든 예약에서 수집 (placeholder 포함)
   _custDetailName = name;
+  _custDetailGroupKey = curGroupKey;
   localStorage.setItem('gamtan_cust_detail', name);
+  localStorage.setItem('gamtan_cust_detail_key', curGroupKey);
   localStorage.setItem('gamtan_view', 'cust');
-  pushNav({ view: 'cust', custName: name });
+  pushNav({ view: 'cust', custName: name, custKey: curGroupKey });
 
 
   // 우측 패널 열기
@@ -8479,8 +8508,6 @@ async function showCustDetail(name, groupKey) {
 
   // 통계 계산
   const custNo = getCustNo(name);
-  const curGroupKey = allBks.length ? custGroupKey(allBks[0]) : (_key || ('nm:'+name));
-  const safeGroupKey = curGroupKey.replace(/'/g,"\\'");
   const totalVisits = bks.length; // 실제 예약만 카운트
   const totalSpent = bks.reduce((s,b)=>s+((b.priceItems&&b.priceItems.length)?priceTotal(b):(b.payments?.total?Number(b.payments.total):0)),0);
   const totalPaid  = bks.reduce((s,b)=>s+(b.payments?paidTotal(b):0),0);
