@@ -5324,10 +5324,19 @@ function subCard(b) {
   if(!b.product||!PRODUCTS[b.product]) b.product='story';
   const p = PRODUCTS[b.product];
   const stage = b.currentStage||0;
-  const d = new Date(b.date);
-  const today = new Date(); today.setHours(0,0,0,0); d.setHours(0,0,0,0);
-  const diff = Math.round((d-today)/(1000*60*60*24));
-  const dateStr = diff===0?'오늘':diff===1?'내일':`${d.getMonth()+1}/${d.getDate()}`;
+  // ★ 날짜미정(dateTbd) 예약은 b.date가 없음 — new Date(null/'')로 계산하면 NaN/NaN이 뜨던 버그 수정
+  let dateStr;
+  if(!b.date) {
+    dateStr = '날짜미정';
+  } else {
+    const d = new Date(b.date);
+    const today = new Date(); today.setHours(0,0,0,0); d.setHours(0,0,0,0);
+    const diff = Math.round((d-today)/(1000*60*60*24));
+    dateStr = diff===0?'오늘':diff===1?'내일':`${d.getMonth()+1}/${d.getDate()}`;
+  }
+  const growthYearTag = (b.product==='growth' && b.contractYear)
+    ? `<span style="font-size:10px;background:#fce7f3;color:#9d174d;border-radius:5px;padding:1px 6px;font-weight:700;white-space:nowrap">${b.cohort?b.cohort+'-'+b.contractYear:b.contractYear+'년차'}</span>`
+    : '';
   const isId2 = b.product==='id';
   const isAllDone2 = isId2 ? stage >= 2 : stage >= 8;
   const hasShooting2 = !isId2 && stage > 3;
@@ -5363,6 +5372,7 @@ function subCard(b) {
     <div style="flex:1;min-width:0">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
         <span class="sub-prod" style="background:${p.color}">${p.name}${(b.product==='bigfam'&&b.bigfamUpgrade)?' → '+(BIGFAM_ALBUMS.find(a=>a.key===(b.bigfamAlbum||'20al'))?.label||'앨범'):''}</span>
+        ${growthYearTag}
         ${(()=>{const a=parseInt(b.adults)||0,k=parseInt(b.kids)||0,t=a+k;return t>0?`<span style="font-size:11px;font-weight:800;color:#1d4ed8;background:#dbeafe;border-radius:6px;padding:1px 6px;white-space:nowrap">👥 ${t}명${a>0&&k>0?` (성인${a}/아이${k})`:a>0?` (성인${a})`:` (아이${k})`}</span>`:''})()}
         ${progressBadgeSub || ''}
         <span style="font-size:12px;color:#555;margin-left:auto">${fmtTime(b.time)}</span>
@@ -6157,7 +6167,7 @@ function openEditModal(id) {
   document.getElementById('f-adults').value=b.adults||0;
   document.getElementById('f-kids').value=b.kids||0;
   document.getElementById('f-childname').value=b.childName||'';
-  document.getElementById('f-date').value=b.date;
+  document.getElementById('f-date').value=b.date||'';
   document.getElementById('f-time').value=b.time;
   setTimeout(()=>highlightTimeBtn(b.time), 50);
   document.getElementById('f-has-kids').checked=b.hasKids||false;
@@ -6329,14 +6339,17 @@ function saveBooking() {
     if(b) {
       const priceChanged = b.product!==product || Number(b.adults)!==adults || Number(b.kids)!==kids || !!b.pet!==pet || !!b.weekend!==weekend
         || (product==='id' && (b.idType!==idType || !!b.idWebFile!==idWebFile || !!b.idPassportAdd!==idPassportAdd || !!b.idIdCardAdd!==idIdCardAdd));
-      Object.assign(b, {name,phone,email,familyNames,product,adults,kids,childName,date,time,hasKids,pet,weekend,postponedDate,snsConsent,idType,idWebFile,idPassportAdd,idIdCardAdd,dateTbd});
+      // ★ 날짜미정(dateTbd)은 date를 빈 문자열('')로 저장 — 코드 곳곳에서 b.date.localeCompare(...)로
+      //   정렬하므로 null을 넣으면 그 즉시 TypeError가 남. ''는 String이라 안전(정렬도 자연스럽게 맨 앞/뒤로 감).
+      Object.assign(b, {name,phone,email,familyNames,product,adults,kids,childName,date:(dateTbd?'':date),time,hasKids,pet,weekend,postponedDate,snsConsent,idType,idWebFile,idPassportAdd,idIdCardAdd,dateTbd});
       if(product==='growth') { b.contractYears=contractYears; b.contractYear=contractYear; b.cohort=cohort; }
       if(priceChanged) { delete b.priceItems; delete b.payments; }
     }
   } else {
     const newId = genId();
     const contractId = product==='growth' && contractYear===1 ? 'cid_'+newId : undefined;
-    const newBk = {id:newId,name,phone,email,familyNames,product,adults,kids,childName,date,time,hasKids,pet,weekend,postponedDate,snsConsent,idType,idWebFile,idPassportAdd,idIdCardAdd,currentStage:0,stageChecks:{},dateTbd,contractYears,contractYear,cohort,contractId};
+    // ★ 날짜미정(dateTbd)은 date를 빈 문자열('')로 저장(위 수정 사유와 동일 — null은 .localeCompare에서 터짐)
+    const newBk = {id:newId,name,phone,email,familyNames,product,adults,kids,childName,date:(dateTbd?'':date),time,hasKids,pet,weekend,postponedDate,snsConsent,idType,idWebFile,idPassportAdd,idIdCardAdd,currentStage:0,stageChecks:{},dateTbd,contractYears,contractYear,cohort,contractId};
     // ★ 고객번호를 직접 입력했으면 그 번호가 최우선(전화가 기존 손님과 같아도 입력값 우선).
     //   비어 있으면 기존 동작 유지: 같은 전화(숫자만)+같은 이름의 기존 손님이면 새 번호 발급 대신
     //   그 고객번호를 물려받음(전화만 같고 이름 다르면 가족일 수 있으니 매칭 안 함 → 새 번호)
@@ -6420,18 +6433,14 @@ function saveBooking() {
     selectedCalDate = date;
   }
   if(editId) {
-    // 수정: 해당 예약 워크플로우로 이동
+    // 수정: 해당 예약이 속한 고객 카드로 복귀 (★ 옛 "단계 진행 현황(1/8단계)" 화면은 더 이상 사용 안 함)
     const b = bookings.find(x=>x.id===editId);
     if(b) {
       selectedId = editId;
       renderAll();
-      if(currentView === 'month') renderMonthCal();
-      renderWorkflow(b);
-      // wf-modal에서 수정을 열었다면 저장 후 wf-modal 재오픈
-      if(_editFromWfModalBid) {
-        _editFromWfModalBid = '';
-        openWfModal(b);
-      }
+      if(currentView === 'month') { renderMonthCal(); }
+      else { showCustDetail(b.name, custGroupKey(b)); }
+      _editFromWfModalBid = ''; // 옛 wf-modal 경로 비활성화 — 더 이상 재오픈하지 않음
     }
   } else {
     // 신규 추가: 방금 추가한 예약으로 바로 이동
@@ -6467,9 +6476,9 @@ function saveBooking() {
           }
         }, 50);
       } else {
-        renderWorkflow(newB);
-        const right = document.getElementById('right');
-        if(right) right.scrollTop = 0;
+        // ★ 옛 "단계 진행 현황(1/8단계)" 화면(renderWorkflow) 대신 고객 카드로 복귀.
+        //   (날짜미정 예약도 여기서 정상적으로 고객 카드에 표시됨)
+        showCustDetail(newB.name, custGroupKey(newB));
       }
     } else {
       renderAll();
