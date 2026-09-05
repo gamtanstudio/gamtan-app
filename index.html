@@ -933,6 +933,10 @@ let userRole = 'staff';
         <input type="email" id="f-email" placeholder="" autocomplete="off">
       </div>
     </div>
+    <div class="form-row" id="f-custno-row">
+      <label>고객번호 <span style="font-size:11px;color:#aaa;font-weight:400">(선택 — 비우면 전화로 기존번호 상속 또는 자동배정)</span></label>
+      <input type="number" min="1" step="1" id="f-custno" placeholder="예: 21034" autocomplete="off">
+    </div>
     <div class="form-row">
       <label>가족 이름 <span style="font-size:11px;color:#aaa;font-weight:400">(아이·남편·가족 이름)</span></label>
       <input type="text" id="f-familynames" lang="ko" placeholder="" autocomplete="off">
@@ -1961,11 +1965,11 @@ function saveCustNumbers() {
   localStorage.setItem('gamtan_cust_numbers', JSON.stringify(custNumbers));
   localStorage.setItem('gamtan_next_cust_no', String(nextCustNo));
 }
-// ★ 수동 고객번호(20000+)를 서버 cust_numbers에 저장 — 기기 바꿔도 유지. SM번호(20000 미만)는 customers가 소스라 제외
+// ★ 고객번호를 서버 cust_numbers에 저장 — 기기 바꿔도 유지. 양의 정수면 전부 저장(상한 없음)
 function saveCustNoToServer(name) {
   if (typeof supa === 'undefined' || !currentUser || !name) return;
-  const no = custNumbers[name];
-  if (!(no >= 20000)) return;
+  const no = Number(custNumbers[name]);
+  if (!(no > 0)) return;
   supa.from('cust_numbers').upsert(
     { name, no, updated_at: new Date().toISOString() },
     { onConflict: 'name' }
@@ -2006,12 +2010,13 @@ function findExistingCustNoByPhone(name, phoneDigits) {
   const cached = Number(custNumbers[match.name]);
   return (Number.isFinite(cached) && cached > 0) ? cached : null;
 }
-// ★ 손님을 묶는 기준 키. customer_no(SM 고유 고객번호)가 있으면 이름은 완전히 무시하고
+// ★ 손님을 묶는 기준 키. customer_no(고유 고객번호)가 있으면 이름은 완전히 무시하고
 //   그것만으로 묶는다 — "김미라" vs "김미라(모니터스케줄)"처럼 이름 꼬리표가 달라도
 //   customer_no가 같으면 한 사람. customer_no가 없을 때만 전화 → 이름 순으로 폴백.
+//   ※ 상한 없음 — 양의 정수이기만 하면 SM 옛 번호(20000 미만)든 CRM 신규 번호(21000+)든 전부 유효.
 function custGroupKey(b) {
   const no = Number(b && b.customer_no);
-  if (no && no > 0 && no < 20000) return 'no:' + no;
+  if (no && no > 0) return 'no:' + no;
   const ph = (b && b.phone ? String(b.phone).replace(/\D/g,'') : '');
   if (ph) return 'ph:' + ph;
   const nm = (b && b.name ? String(b.name).trim() : '');
@@ -2023,6 +2028,11 @@ function pickGroupDisplayName(bks) {
   if (clean) return clean.name;
   const first = bks.find(b => b && b.name);
   return first ? first.name : '';
+}
+// ★ customer_no 충돌 검사 — newNo(양의 정수)를 이미 다른 손님(custGroupKey가 myGroupKey와 다른 예약)이
+//   쓰고 있으면 그 예약을 반환. 없으면 null. (번호수정/신규등록 번호직접입력 공용)
+function findCustNoConflict(newNo, myGroupKey) {
+  return bookings.find(b => Number(b.customer_no) === newNo && custGroupKey(b) !== myGroupKey) || null;
 }
 
 // ===== Supabase 연동 =====
@@ -2344,7 +2354,7 @@ async function loadFromSupabase() {
           const memoText = c.memo.trim().substring(0, 500);
           if (!custMemos[name]) custMemos[name] = memoText;
         }
-        if (c.id && c.id > 0 && c.id < 20000) {
+        if (c.id && c.id > 0) {
           custNumbers[name] = c.id;
         }
         if (!customers.includes(name)) customers.push(name);
@@ -4004,6 +4014,11 @@ function showNewCustForm(cr, q, isPhone) {
             ' oninput="formatPhoneInput(this)"' +
             ' style="width:100%;border:1.5px solid #fed7aa;border-radius:8px;padding:8px 12px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box">' +
         '</div>' +
+        '<div style="margin-bottom:10px">' +
+          '<label style="font-size:12px;color:#78350f;font-weight:600;display:block;margin-bottom:4px">고객번호 (선택 — 비우면 자동 배정)</label>' +
+          '<input id="popup-new-custno" type="number" min="1" step="1" placeholder="예: 21034"' +
+            ' style="width:100%;border:1.5px solid #fed7aa;border-radius:8px;padding:8px 12px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box">' +
+        '</div>' +
         '<div style="margin-bottom:14px">' +
           '<label style="font-size:12px;color:#78350f;font-weight:600;display:block;margin-bottom:4px">메모 (통화 내용 등)</label>' +
           '<textarea id="popup-new-memo" rows="3"' +
@@ -4134,9 +4149,27 @@ function saveNewCustFromPopup() {
   const nameEl  = document.getElementById('popup-new-name');
   const phoneEl = document.getElementById('popup-new-phone');
   const memoEl  = document.getElementById('popup-new-memo');
+  const custNoEl = document.getElementById('popup-new-custno');
   let name  = (nameEl?.value  || '').trim();
   const phone = (phoneEl?.value || '').trim();
   const memo  = (memoEl?.value  || '').trim();
+  const custNoRaw = (custNoEl?.value || '').trim();
+  let custNo = null;
+  if(custNoRaw) {
+    custNo = Number(custNoRaw);
+    if(!Number.isInteger(custNo) || custNo <= 0) {
+      alert('고객번호는 양의 정수만 입력할 수 있어요.');
+      if(custNoEl) custNoEl.focus();
+      return;
+    }
+    const conflict = bookings.find(b => Number(b.customer_no) === custNo);
+    if(conflict) {
+      const ownerName = pickGroupDisplayName(bookings.filter(b => custGroupKey(b) === custGroupKey(conflict)));
+      alert('이 번호(' + custNo + ')는 이미 ' + dispName(ownerName) + '님이 쓰고 있어요. 다른 번호를 입력하세요.');
+      if(custNoEl) custNoEl.focus();
+      return;
+    }
+  }
   // 이름이 비면 검색창 값 사용 (전화번호가 아닌 경우)
   if(!name) {
     const searchQ = (document.getElementById('cust-popup-input')?.value||'').trim();
@@ -4159,7 +4192,7 @@ function saveNewCustFromPopup() {
     const newName   = name + ' (' + nextNum + ')';
     const cr2 = document.getElementById('cust-popup-result');
     // 클릭 핸들러에 쓸 데이터는 전역 임시 변수로 저장해 따옴표 이탈 문제 방지
-    window._popupPending = {name, phone, memo, newName};
+    window._popupPending = {name, phone, memo, newName, custNo};
     if(cr2) cr2.innerHTML =
       '<div style="padding:14px">' +
         '<div style="background:#fef9c3;border:1.5px solid #fbbf24;border-radius:12px;padding:16px">' +
@@ -4174,7 +4207,7 @@ function saveNewCustFromPopup() {
               'style="width:100%;background:#6366f1;color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:700;cursor:pointer">' +
               '✅ 같은 고객입니다 → 기존 카드로 이동' +
             '</button>' +
-            '<button onclick="doRegNewCust(window._popupPending.newName,window._popupPending.phone,window._popupPending.memo)" ' +
+            '<button onclick="doRegNewCust(window._popupPending.newName,window._popupPending.phone,window._popupPending.memo,window._popupPending.custNo)" ' +
               'style="width:100%;background:#ea580c;color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:700;cursor:pointer">' +
               '👤 다른 사람입니다 → &ldquo;' + escHtml(newName) + '&rdquo;으로 새 등록' +
             '</button>' +
@@ -4183,7 +4216,7 @@ function saveNewCustFromPopup() {
       '</div>';
     return;
   }
-  doRegNewCust(name, phone, memo);
+  doRegNewCust(name, phone, memo, custNo);
 }
 
 // 기존 고객으로 이동 (전화번호만 업데이트)
@@ -4201,10 +4234,10 @@ function doGoExistCust(name, phone, memo) {
 }
 
 // 신규 고객 실제 등록
-function doRegNewCust(name, phone, memo) {
+function doRegNewCust(name, phone, memo, custNo) {
   const id = 'cust_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
   const todayStr = new Date().toISOString().slice(0,10);
-  bookings.push({
+  const newBk = {
     id, name, phone: phone || '',
     date: todayStr, time: new Date().toTimeString().slice(0,5),
     product: 'story', stage: 0,
@@ -4212,7 +4245,17 @@ function doRegNewCust(name, phone, memo) {
     stageChecks: {},
     _phonePlaceholder: true,
     cancelled: false
-  });
+  };
+  // 고객번호를 직접 입력했으면 그 번호 사용(전화로 상속될 기존번호보다 우선). 비었으면 기존 동작 그대로
+  // (전화 상속/자동배정은 getCustNo·findExistingCustNoByPhone이 다른 흐름에서 그대로 처리)
+  const custNoNum = Number(custNo);
+  if(Number.isInteger(custNoNum) && custNoNum > 0) {
+    newBk.customer_no = custNoNum;
+    custNumbers[name] = custNoNum;
+    saveCustNumbers();
+    saveCustNoToServer(name);
+  }
+  bookings.push(newBk);
   saveBookings();
   if(memo) { custMemos[name] = (custMemos[name] ? custMemos[name]+'\n' : '') + memo; saveCustMemos(name); }
   const cr2 = document.getElementById('cust-popup-result');
@@ -6059,6 +6102,8 @@ function openAddModal() {
   document.getElementById('f-phone').value='';
   document.getElementById('f-email').value='';
   document.getElementById('f-familynames').value='';
+  { const cnEl=document.getElementById('f-custno'); if(cnEl) cnEl.value=''; }
+  { const cnRow=document.getElementById('f-custno-row'); if(cnRow) cnRow.style.display=''; }
   document.getElementById('f-product').value='story';
   // 상품별 기본 인원 설정
   const defaultAdults = {story:2, simpfam:2, bigfam:15, growth:2, kids:0, profile:1, jangsu:2, id:1};
@@ -6103,6 +6148,7 @@ function openEditModal(id) {
   { const _fp=document.getElementById('f-phone'); _fp.value=b.phone||''; formatPhoneInput(_fp); }
   document.getElementById('f-email').value=b.email||'';
   document.getElementById('f-familynames').value=b.familyNames||'';
+  { const cnRow=document.getElementById('f-custno-row'); if(cnRow) cnRow.style.display='none'; }
   document.getElementById('f-product').value=b.product;
   document.getElementById('f-adults').value=b.adults||0;
   document.getElementById('f-kids').value=b.kids||0;
@@ -6206,6 +6252,27 @@ function saveBooking() {
 
   const editId = document.getElementById('edit-id').value;
 
+  // ── 고객번호 직접입력 검증 (신규 예약만) ──────────────────────────────
+  let regCustNo = null;
+  if(!editId) {
+    const custNoRaw = (document.getElementById('f-custno')?.value || '').trim();
+    if(custNoRaw) {
+      regCustNo = Number(custNoRaw);
+      if(!Number.isInteger(regCustNo) || regCustNo <= 0) {
+        alert('고객번호는 양의 정수만 입력할 수 있어요.');
+        const cnEl = document.getElementById('f-custno'); if(cnEl) cnEl.focus();
+        return;
+      }
+      const cnConflict = bookings.find(b => Number(b.customer_no) === regCustNo);
+      if(cnConflict) {
+        const ownerName = pickGroupDisplayName(bookings.filter(b => custGroupKey(b) === custGroupKey(cnConflict)));
+        alert('이 번호(' + regCustNo + ')는 이미 ' + dispName(ownerName) + '님이 쓰고 있어요. 다른 번호를 입력하세요.');
+        const cnEl = document.getElementById('f-custno'); if(cnEl) cnEl.focus();
+        return;
+      }
+    }
+  }
+
   // ── 동명이인 체크 (신규 예약만) ──────────────────────────────────────
   if(!editId && name && phone) {
     const phoneDigits = phone.replace(/[^0-9]/g,'');
@@ -6266,9 +6333,15 @@ function saveBooking() {
     const newId = genId();
     const contractId = product==='growth' && contractYear===1 ? 'cid_'+newId : undefined;
     const newBk = {id:newId,name,phone,email,familyNames,product,adults,kids,childName,date,time,hasKids,pet,weekend,postponedDate,snsConsent,idType,idWebFile,idPassportAdd,idIdCardAdd,currentStage:0,stageChecks:{},dateTbd,contractYears,contractYear,cohort,contractId};
-    // ★ 같은 전화(숫자만)+같은 이름의 기존 손님이면 새 번호 발급 대신 그 고객번호를 물려받음
-    //   (전화만 같고 이름 다르면 가족일 수 있으니 매칭 안 함 → 새 번호)
-    if (phone) {
+    // ★ 고객번호를 직접 입력했으면 그 번호가 최우선(전화가 기존 손님과 같아도 입력값 우선).
+    //   비어 있으면 기존 동작 유지: 같은 전화(숫자만)+같은 이름의 기존 손님이면 새 번호 발급 대신
+    //   그 고객번호를 물려받음(전화만 같고 이름 다르면 가족일 수 있으니 매칭 안 함 → 새 번호)
+    if (regCustNo) {
+      newBk.customer_no = regCustNo;
+      custNumbers[name] = regCustNo;
+      try { localStorage.setItem('gamtan_cust_numbers', JSON.stringify(custNumbers)); } catch(e) {}
+      saveCustNoToServer(name);
+    } else if (phone) {
       const phoneDigits = phone.replace(/[^0-9]/g,'');
       const inheritedNo = findExistingCustNoByPhone(name, phoneDigits);
       if (inheritedNo) {
@@ -6539,6 +6612,47 @@ async function renameCustomer(oldName, newName){
   addCustLog(newName, '고객 이름 변경: '+oldName+' → '+newName);
   _lastCustName=null;
   showCustDetail(newName, custGroupKey(custBks[0]));
+}
+
+// ★ 기존 손님 고객번호 수정 (showCustDetail 상세페이지의 "번호수정" 버튼)
+function editCustNoPrompt(safeName, safeGroupKey){
+  const name = (safeName||'').replace(/\\'/g,"'");
+  const groupKey = (safeGroupKey||'').replace(/\\'/g,"'");
+  const myBks = bookings.filter(b => custGroupKey(b) === groupKey);
+  if(!myBks.length){ alert('대상 고객을 찾지 못했어요.'); return; }
+  const curNo = groupKey.indexOf('no:')===0 ? Number(groupKey.slice(3)) : null;
+  const input = prompt('새 고객번호를 입력하세요 (양의 정수, 상한 없음).' + (curNo!=null ? '\n현재 번호: '+curNo : '\n현재 번호 없음'), curNo!=null ? String(curNo) : '');
+  if(input===null) return;
+  const newNo = Number(String(input).trim());
+  if(!Number.isInteger(newNo) || newNo <= 0){ alert('양의 정수만 입력할 수 있어요.'); return; }
+  if(curNo === newNo) return;
+  const conflict = findCustNoConflict(newNo, groupKey);
+  if(conflict){
+    const ownerKey = custGroupKey(conflict);
+    const ownerName = pickGroupDisplayName(bookings.filter(b => custGroupKey(b) === ownerKey));
+    alert('이 번호(' + newNo + ')는 이미 ' + dispName(ownerName) + '님이 쓰고 있어요. 다른 번호를 입력하세요.');
+    return;
+  }
+  if(!confirm('이 손님 예약 ' + myBks.length + '건 번호를 ' + (curNo!=null?curNo:'(없음)') + ' → ' + newNo + '로 바꿉니다. 진행할까요?')) return;
+  applyCustNoChange(myBks, newNo, name);
+}
+// 위 프롬프트가 통과된 뒤 실제 반영 — bookings/custNumbers 갱신 + Supabase 200건씩 배치 upsert
+async function applyCustNoChange(myBks, newNo, name){
+  const affectedNames = [...new Set(myBks.map(b=>b.name).filter(Boolean))];
+  myBks.forEach(b => { b.customer_no = newNo; });
+  affectedNames.forEach(nm => { custNumbers[nm] = newNo; });
+  saveCustNumbers();
+  saveBookings(); // 직접등록(!smmate) 예약분은 여기서 manual_bookings에 기존 200배치 로직으로 반영됨
+  if(typeof supa !== 'undefined' && currentUser && affectedNames.length){
+    const rows = affectedNames.map(nm => ({ name: nm, no: newNo, updated_at: new Date().toISOString() }));
+    const BATCH = 200;
+    for(let i=0; i<rows.length; i+=BATCH){
+      const chunk = rows.slice(i, i+BATCH);
+      const { error } = await supa.from('cust_numbers').upsert(chunk, { onConflict: 'name' });
+      if(error) console.error('고객번호 저장 실패:', error);
+    }
+  }
+  showCustDetail(name, 'no:' + newNo);
 }
 
 // ====================== 월간 캘린더 ======================
@@ -7728,7 +7842,7 @@ function buildDupSmPanel(name, distinctSmIds, profiles, allBks) {
     const p = profiles[smId] || {};
     const bks = allBks.filter(b => custGroupKey(b) === 'no:' + Number(smId));
     const last = bks[bks.length - 1];
-    const custNoDisp = (Number(smId) > 0 && Number(smId) < 20000) ? `#${smId}` : '(고객번호 없음)';
+    const custNoDisp = (Number(smId) > 0) ? `#${smId}` : '(고객번호 없음)';
     return `<div style="background:#fff;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;margin-top:6px">
       <div style="font-size:12px;font-weight:700;color:#92400e">${custNoDisp} · smmate_id ${smId}${p.mom_phone?` · ${escHtml(p.mom_phone)}`:''}</div>
       ${last?`<div style="font-size:11px;color:#78716c;margin-top:2px">최근 방문: ${last.date} ${(PRODUCTS[last.product]||{}).name||last.product} (예약 ${bks.length}건)</div>`:''}
@@ -7750,7 +7864,7 @@ async function showCustDetailBySmId(name, smmateId) {
     .sort((a,bb)=>a.date.localeCompare(bb.date)||a.time.localeCompare(bb.time));
   const profiles = await fetchSmProfilesByIds([smmateId]);
   const p = profiles[String(smmateId)] || {};
-  const custNo = (Number(smmateId)>0 && Number(smmateId)<20000) ? smmateId : '(없음)';
+  const custNo = (Number(smmateId)>0) ? smmateId : '(없음)';
   const phone = p.mom_phone || p.dad_phone || [...allBks].reverse().map(b=>b.phone).find(Boolean) || '';
   const sKey = smKey(smmateId);
   const safeSKey = sKey; // sm_16422 형태라 이스케이프 필요한 특수문자 없음
@@ -8289,7 +8403,7 @@ async function showCustDetail(name, groupKey) {
       : bookings.filter(b => b.name === name)
     ).sort((a,bb)=>a.date.localeCompare(bb.date)||a.time.localeCompare(bb.time));
   if(!allBks.length) return;
-  // [재키잉 파일럿] 이 이름에 customer_no(20000 미만 유효번호)가 2개 이상이면(동명이인) 원본 기준 분리 패널 준비
+  // [재키잉 파일럿] 이 이름에 customer_no(양의 정수 유효번호)가 2개 이상이면(동명이인) 원본 기준 분리 패널 준비
   const _distinctSmIds = [...new Set(allBks.map(b=>{
     const k = custGroupKey(b);
     return k.indexOf('no:')===0 ? k.slice(3) : null;
@@ -8302,7 +8416,7 @@ async function showCustDetail(name, groupKey) {
     try {
       const custId = Object.keys(custNumbers).find(k => k === name);
       const smmateId = custId ? custNumbers[custId] : null;
-      if (smmateId && smmateId < 20000) {
+      if (smmateId && Number(smmateId) > 0) {
         const { data: recs } = await supa.from('visit_records')
           .select('recorded_at,memo')
           .eq('customer_no', String(smmateId))
@@ -8319,7 +8433,7 @@ async function showCustDetail(name, groupKey) {
         }
       }
       // 출고상품 불러오기 → smmate_id 기준, 계약번호별로 그룹핑
-      if (smmateId && smmateId < 20000) {
+      if (smmateId && Number(smmateId) > 0) {
         const { data: prods } = await supa.from('order_products')
           .select('id,product_detail,delivery_status,contract_no,is_delivered')
           .eq('customer_id', String(smmateId));
@@ -8365,6 +8479,8 @@ async function showCustDetail(name, groupKey) {
 
   // 통계 계산
   const custNo = getCustNo(name);
+  const curGroupKey = allBks.length ? custGroupKey(allBks[0]) : (_key || ('nm:'+name));
+  const safeGroupKey = curGroupKey.replace(/'/g,"\\'");
   const totalVisits = bks.length; // 실제 예약만 카운트
   const totalSpent = bks.reduce((s,b)=>s+((b.priceItems&&b.priceItems.length)?priceTotal(b):(b.payments?.total?Number(b.payments.total):0)),0);
   const totalPaid  = bks.reduce((s,b)=>s+(b.payments?paidTotal(b):0),0);
@@ -8406,6 +8522,7 @@ async function showCustDetail(name, groupKey) {
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px">
             <span style="font-size:20px;font-weight:800;color:#1a1a2e">${escHtml(dispName(name))}님</span>
             <span style="font-size:13px;background:#e0e7ff;color:#4338ca;border-radius:6px;padding:2px 8px;font-weight:700">#${custNo}</span>
+            <button onclick="editCustNoPrompt('${safeName}','${safeGroupKey}')" style="font-size:11px;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;border-radius:6px;padding:2px 8px;cursor:pointer;font-weight:600">🔢 번호수정</button>
             ${allBks.length && allBks.every(x=>!x.smmate && !String(x.id).startsWith('sm_')) ? `<button onclick="renameCustomerPrompt('${safeName}')" style="font-size:11px;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;border-radius:6px;padding:2px 8px;cursor:pointer;font-weight:600">✏️ 이름수정</button>` : ''}
             <span style="font-size:13px;font-weight:700;color:${latestColor}">${latestStatus}</span>
             ${hasSns?`<span style="font-size:12px;background:#fef2f2;color:#dc2626;border-radius:6px;padding:2px 8px;font-weight:700">📷 SNS동의</span>`:`<span style="font-size:12px;color:#9ca3af">SNS미동의</span>`}
