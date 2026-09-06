@@ -1931,24 +1931,25 @@ function saveCustLogs(name) {
     ).then(({ error }) => { if (error) console.error('활동기록 저장 실패:', error); });
   }
 }
-function addCustLog(name, text) {
-  if(!custLogs[name]) custLogs[name] = [];
+// ★ key는 반드시 custGroupKey(b) 결과값(예: 'no:15776') — 절대 순수 이름을 넘기지 말 것 (동명이인 혼선 방지)
+function addCustLog(key, text) {
+  if(!custLogs[key]) custLogs[key] = [];
   const now = new Date();
   const dt = now.toISOString().slice(0,10);
   const tm = now.toTimeString().slice(0,5);
-  custLogs[name].unshift({dt, tm, text});
-  saveCustLogs(name);
+  custLogs[key].unshift({dt, tm, text});
+  saveCustLogs(key);
 }
-function addLogFromInput(safeName, realName) {
+function addLogFromInput(safeName, key) {
   const el = document.getElementById('cust-log-input-'+safeName);
   if(!el || !el.value.trim()) return;
   const text = el.value.trim();
   el.value = '';
-  addCustLog(realName, text);
+  addCustLog(key, text);
   // 로그 목록 갱신
   const listEl = document.getElementById('cust-log-list-'+safeName);
   if(listEl) {
-    const logs = (custLogs[realName]||[]).slice(0,30);
+    const logs = (custLogs[key]||[]).slice(0,30);
     listEl.innerHTML = logs.map(l=>`
       <div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid #f5f5f5;align-items:flex-start">
         <span style="font-size:10px;color:#9ca3af;white-space:nowrap;margin-top:2px">${l.dt}<br>${l.tm}</span>
@@ -2021,6 +2022,42 @@ function custGroupKey(b) {
   if (ph) return 'ph:' + ph;
   const nm = (b && b.name ? String(b.name).trim() : '');
   return 'nm:' + nm;
+}
+// ★★★ 상담메모(custMemos)·활동기록(custLogs) 키 재설계 ★★★
+// 예전엔 이 두 저장소를 전부 "이름" 하나로만 키를 잡아서, 동명이인이면 서로 다른 사람의
+// 메모·활동기록이 한 키에 섞여 보이는 버그가 있었다(예: 정지원 #15776 상세에 다른 정지원 메모가 뜸).
+// 지금부터 새로 읽고 쓰는 모든 곳은 custGroupKey(b) 결과값('no:15776' 처럼 고객번호 있으면 번호 기준,
+// 없으면 'ph:전화'/'nm:이름')을 키로 써야 한다 — 절대 b.name(순수 이름 문자열)을 키로 쓰지 말 것.
+// 이 버그 수정 이전에 저장된 옛 데이터는 여전히 순수 이름으로 저장돼 있으므로, 읽을 때는
+// getCustMemoByKey/getCustLogsByKey를 통해 "동명이인이 아닌 경우에 한해서만" 그 옛 데이터를 폴백으로 보여준다.
+// 동명이인이면(같은 이름에 custGroupKey가 2개 이상) 옛 이름-키 데이터가 둘 중 누구 것인지 알 수 없으므로
+// 절대 폴백하지 않는다 — 그게 바로 이 버그였기 때문.
+let _dupNameMap = null, _dupNameMapBookings = null;
+function isDuplicateCustName(name) {
+  if (!name) return false;
+  if (_dupNameMapBookings !== bookings) {
+    const map = new Map();
+    bookings.forEach(b => {
+      if (!b || !b.name) return;
+      let s = map.get(b.name);
+      if (!s) { s = new Set(); map.set(b.name, s); }
+      s.add(custGroupKey(b));
+    });
+    _dupNameMap = map;
+    _dupNameMapBookings = bookings;
+  }
+  const s = _dupNameMap.get(name);
+  return !!s && s.size > 1;
+}
+function getCustMemoByKey(groupKey, name) {
+  if (groupKey && custMemos[groupKey] != null) return custMemos[groupKey];
+  if (name && !isDuplicateCustName(name) && custMemos[name] != null) return custMemos[name];
+  return '';
+}
+function getCustLogsByKey(groupKey, name) {
+  if (groupKey && Array.isArray(custLogs[groupKey]) && custLogs[groupKey].length) return custLogs[groupKey];
+  if (name && !isDuplicateCustName(name) && Array.isArray(custLogs[name])) return custLogs[name];
+  return [];
 }
 // 그룹(같은 custGroupKey) 안에서 대표로 보여줄 이름 — 괄호 꼬리표(예: "(모니터스케줄)") 없는 이름을 우선
 function pickGroupDisplayName(bks) {
@@ -2354,8 +2391,12 @@ async function loadFromSupabase() {
         custProfiles[name].mom_phone = c.mom_phone || c.dad_phone;
         custProfiles[name].last_visit = c.last_visit;
         if (c.memo && c.memo.trim()) {
+          // ★ 이름이 아니라 고객번호(customer_no, 없으면 smmate_id=c.id) 기준 키로 저장 —
+          //   이름으로 저장하면 동명이인의 SM 원본 메모가 서로 섞인다.
+          const custNoForKey = Number(c.customer_no) > 0 ? Number(c.customer_no) : (Number(c.id) > 0 ? Number(c.id) : null);
+          const memoKey = custNoForKey ? ('no:' + custNoForKey) : name;
           const memoText = c.memo.trim().substring(0, 500);
-          if (!custMemos[name]) custMemos[name] = memoText;
+          if (!custMemos[memoKey]) custMemos[memoKey] = memoText;
         }
         if (c.id && c.id > 0) {
           custNumbers[name] = c.id;
@@ -2848,6 +2889,7 @@ async function toggleDelivery(productId, isDone, checkbox) {
     checkbox.checked = !isDone;
   }
 }
+// ★ onlyName 인자는 반드시 custGroupKey(b) 결과값 — 순수 이름을 넘기면 동명이인끼리 다시 섞인다
 function saveCustMemos(onlyName) {
   // 로컬은 항상 즉시 저장(용량 초과 시 조용히 실패할 수 있어 서버가 신뢰 소스)
   try { localStorage.setItem('gamtan_cust_memos', JSON.stringify(custMemos)); } catch(e) {}
@@ -2899,7 +2941,7 @@ function toggleCustFamilyEdit(safeName, realName) {
   viewEl.style.display = isEdit ? '' : 'none';
   editEl.style.display = isEdit ? 'none' : '';
 }
-function saveCustFamilyEdit(safeName, realName) {
+function saveCustFamilyEdit(safeName, realName, groupKey) {
   const el = document.getElementById('cust-family-input-'+safeName);
   if(!el) return;
   const val = el.value.trim();
@@ -2912,7 +2954,8 @@ function saveCustFamilyEdit(safeName, realName) {
     : `<span style="font-size:13px;color:#c4b5fd;font-style:italic">미입력</span>`;
   if(editEl) editEl.style.display = 'none';
   if(viewEl) viewEl.style.display = '';
-  addCustLog(realName, `가족 정보 수정 — ${val||'(비움)'}`);
+  // ★ 활동기록은 groupKey(고객번호 기반)로 — 안 넘어오면(옛 sm_ 스코프 화면 호출) realName 그대로 사용
+  addCustLog(groupKey || realName, `가족 정보 수정 — ${val||'(비움)'}`);
 }
 function cancelCustFamilyEdit(safeName) {
   const viewEl = document.getElementById('cust-family-view-'+safeName);
@@ -2929,7 +2972,7 @@ function toggleCustExtraEdit(safeName) {
   viewEl.style.display = isEdit ? '' : 'none';
   editEl.style.display = isEdit ? 'none' : '';
 }
-function saveCustExtraFields(safeName, realName) {
+function saveCustExtraFields(safeName, realName, groupKey) {
   const motive   = document.getElementById('cx-motive-'+safeName)?.value||'';
   const referrer = document.getElementById('cx-referrer-'+safeName)?.value.trim()||'';
   const birthday = document.getElementById('cx-birthday-'+safeName)?.value.trim()||'';
@@ -2965,7 +3008,7 @@ function saveCustExtraFields(safeName, realName) {
   if(viewEl) viewEl.innerHTML = parts||`<span style="font-size:12px;color:#94a3b8;font-style:italic">방문동기·생일·기념일 등 — 수정 버튼으로 입력</span>`;
   if(editEl) editEl.style.display = 'none';
   if(viewEl) viewEl.style.display = '';
-  addCustLog(realName, `고객 정보 수정 — 방문동기:${motive||'-'} 생일:${birthday||'-'}`);
+  addCustLog(groupKey || realName, `고객 정보 수정 — 방문동기:${motive||'-'} 생일:${birthday||'-'}`);
 }
 
 // ── 출고/납품 관리 ────────────────────────────────────────────────
@@ -4225,11 +4268,13 @@ function saveNewCustFromPopup() {
 
 // 기존 고객으로 이동 (전화번호만 업데이트)
 function doGoExistCust(name, phone, memo) {
+  const latest = bookings.filter(b=>b.name===name).sort((a,b)=>b.date.localeCompare(a.date))[0];
   if(phone) {
-    const latest = bookings.filter(b=>b.name===name).sort((a,b)=>b.date.localeCompare(a.date))[0];
     if(latest && !latest.phone) { latest.phone = phone; saveBookings(); }
   }
-  if(memo) { custMemos[name] = (custMemos[name] ? custMemos[name]+'\n' : '') + memo; saveCustMemos(name); }
+  // ★ 이 기존 고객의 custGroupKey로 저장 — 이름만 쓰면 동명이인의 메모와 섞인다
+  const key = latest ? custGroupKey(latest) : name;
+  if(memo) { custMemos[key] = (custMemos[key] ? custMemos[key]+'\n' : '') + memo; saveCustMemos(key); }
   const cr2 = document.getElementById('cust-popup-result');
   if(cr2) cr2.innerHTML = '';
   stageFilter = null;
@@ -4261,14 +4306,16 @@ function doRegNewCust(name, phone, memo, custNo) {
   }
   bookings.push(newBk);
   saveBookings();
-  if(memo) { custMemos[name] = (custMemos[name] ? custMemos[name]+'\n' : '') + memo; saveCustMemos(name); }
+  // ★ 이 새 고객의 custGroupKey로 저장(고객번호 있으면 번호 기준, 없으면 전화/이름) — 동명이인 혼선 방지
+  const key = custGroupKey(newBk);
+  if(memo) { custMemos[key] = (custMemos[key] ? custMemos[key]+'\n' : '') + memo; saveCustMemos(key); }
   const cr2 = document.getElementById('cust-popup-result');
   if(cr2) cr2.innerHTML = '';
   stageFilter = null;
   openCustGroups[name] = true;
   // 활동 기록에 상담 로그 자동 추가 (selectCustFromPopup 이후 렌더 반영을 위해 setTimeout)
   const logText = '📞 전화 상담 등록' + (phone ? ' — ' + phone : '') + (memo ? ' / ' + memo : '');
-  addCustLog(name, logText);
+  addCustLog(key, logText);
   selectCustFromPopup(name);
   // 로그 저장 후 고객 카드 재렌더링
   setTimeout(()=>{ try{ showCustDetail(name, newBk.customer_no ? ('no:'+newBk.customer_no) : undefined); }catch(e){} }, 120);
@@ -5003,10 +5050,10 @@ function matchesQuery(b, query) {
   // 가족 정보 (새 custProfiles)
   const prof = custProfiles[b.name]||{};
   if((prof.familyInfo||'').toLowerCase().includes(q)) return true;
-  // 고객 메모 (전체)
-  if((custMemos[b.name]||'').toLowerCase().includes(q)) return true;
+  // 고객 메모 (전체) — 이 예약의 실제 custGroupKey 기준(동명이인 혼선 방지)
+  if(getCustMemoByKey(custGroupKey(b), b.name).toLowerCase().includes(q)) return true;
   // 활동 로그
-  if((custLogs[b.name]||[]).some(l=>(l.text||'').toLowerCase().includes(q))) return true;
+  if(getCustLogsByKey(custGroupKey(b), b.name).some(l=>(l.text||'').toLowerCase().includes(q))) return true;
   return false;
 }
 
@@ -6407,19 +6454,28 @@ function saveBooking() {
       b.phone && b.phone.replace(/[^0-9]/g,'') === phoneDigits
     );
     if(matched.length > 0) {
+      // 방금 만든(또는 이 전화번호로 기존에 있던) 실제 예약 — custMemos/custLogs 이전 대상
+      const newBk = bookings[bookings.length-1];
+      const newKey = custGroupKey(newBk);
       matched.forEach(old => {
-        // 메모 이전
-        if(custMemos[old.name]) {
-          custMemos[name] = (custMemos[name] ? custMemos[name] + '\n' : '') + custMemos[old.name];
-          delete custMemos[old.name];
-          saveCustMemos(name);
-        }
-        // 활동 로그 이전
-        if(custLogs[old.name]) {
-          custLogs[name] = [...(custLogs[name]||[]), ...custLogs[old.name]];
-          delete custLogs[old.name];
-          saveCustLogs(name);
-        }
+        // ★ old의 custGroupKey(보통 'ph:'+전화번호, doRegNewCust가 실제로 저장했던 키와 동일)로도,
+        //   이 버그 수정 전 이름으로 저장됐을 수도 있는 옛 데이터로도 둘 다 확인해서 이전한다.
+        const oldKey = custGroupKey(old);
+        const mergeMemo = (src) => {
+          if(custMemos[src] == null) return;
+          custMemos[newKey] = (custMemos[newKey] ? custMemos[newKey] + '\n' : '') + custMemos[src];
+          delete custMemos[src];
+        };
+        const mergeLogs = (src) => {
+          if(custLogs[src] == null) return;
+          custLogs[newKey] = [...(custLogs[newKey]||[]), ...custLogs[src]];
+          delete custLogs[src];
+        };
+        if(oldKey !== newKey) { mergeMemo(oldKey); mergeLogs(oldKey); }
+        mergeMemo(old.name);
+        mergeLogs(old.name);
+        if(custMemos[newKey]!=null) saveCustMemos(newKey);
+        if(custLogs[newKey]!=null)  saveCustLogs(newKey);
         // 상담 예약 자체를 이름만 바꿔서 유지 (기록 남김)
         old.name = name;
         old.phone = phone;
@@ -6435,7 +6491,7 @@ function saveBooking() {
     const pName = (PRODUCTS[product]||PRODUCTS.story).name;
     const yearTag = product==='growth'&&contractYear ? ` ${cohort?cohort+'-'+contractYear+'회차':contractYear+'년차'}` : '';
     const dateTag = dateTbd ? '(날짜 미정)' : `${fmtDateKo(date)} ${time}`;
-    addCustLog(name, `예약 등록 — ${pName}${yearTag} ${dateTag}`);
+    addCustLog(custGroupKey(newB), `예약 등록 — ${pName}${yearTag} ${dateTag}`);
   }
   saveBookings();
   // ★ 네이버 전환이면: 원문을 예약 메모로 남기고, 원본 네이버 예약 삭제
@@ -6628,19 +6684,30 @@ async function renameCustomer(oldName, newName){
   if(bookings.some(b=>b.name===newName)){
     if(!confirm('이미 "'+dispName(newName)+'" 고객이 있어요.\n두 카드가 하나로 합쳐집니다. 계속할까요?')) return;
   }
+  // ★ custMemos/custLogs는 이름이 아니라 custGroupKey 기준이므로, 이름 변경 전/후 키를 미리 계산해 둔다.
+  //   고객번호나 전화번호가 있으면 이름을 바꿔도 키가 그대로라 이전이 필요 없고,
+  //   둘 다 없어 이름 자체가 키('nm:이름')였던 경우에만 실제로 키가 바뀐다.
+  const oldKey = custGroupKey(custBks[0]);
   // 예약 이름 변경 (수동만) — manual_bookings jsonb에 그대로 저장되어 영구 반영
   custBks.forEach(b=>{ b.name=newName; });
-  // 이름을 키로 쓰는 로컬 데이터 이전 (대상에 이미 값이 있으면 대상 우선 = 합치기)
+  const newKey = custGroupKey(custBks[0]);
+  // 이름을 키로 쓰는 로컬 데이터 이전 (대상에 이미 값이 있으면 대상 우선 = 합치기) — custMemos/custLogs 제외
   const move=(m)=>{ if(m && m[oldName]!=null){ if(m[newName]==null) m[newName]=m[oldName]; delete m[oldName]; } };
-  move(custNumbers); move(custMemos); move(custLogs); move(custExtra); move(custProfiles);
+  move(custNumbers); move(custExtra); move(custProfiles);
   if(window._smProducts) move(window._smProducts);
+  // custMemos/custLogs 이전: groupKey가 실제로 바뀐 경우(고객번호·전화 없이 이름만 키였던 경우) + 이 버그 수정
+  // 이전에 저장됐을 수 있는 옛 이름-키 데이터, 둘 다 확인해서 newKey로 합친다.
+  const mergeMemo=(src)=>{ if(custMemos[src]==null) return; custMemos[newKey]=(custMemos[newKey]?custMemos[newKey]+'\n':'')+custMemos[src]; if(src!==newKey) delete custMemos[src]; };
+  const mergeLogs=(src)=>{ if(custLogs[src]==null) return; custLogs[newKey]=[...(custLogs[newKey]||[]),...custLogs[src]]; if(src!==newKey) delete custLogs[src]; };
+  if(oldKey!==newKey){ mergeMemo(oldKey); mergeLogs(oldKey); }
+  mergeMemo(oldName); mergeLogs(oldName);
   saveCustNumbers();
   // 서버(이름 키 테이블)에 새 이름으로 반영 — 옛 이름 행은 참조가 없어 무해
   try{
     if(typeof supa!=='undefined' && currentUser){
       saveCustNoToServer(newName);
-      if(custMemos[newName]!=null) saveCustMemos(newName);
-      if(custLogs[newName]!=null)  saveCustLogs(newName);
+      if(custMemos[newKey]!=null) saveCustMemos(newKey);
+      if(custLogs[newKey]!=null)  saveCustLogs(newKey);
       if(custProfiles[newName]) ['familyInfo','husbandName','childNames'].forEach(f=>{ if(custProfiles[newName][f]!=null) setCustProfile(newName,f,custProfiles[newName][f]); });
       if(custExtra[newName]!=null){
         supa.from('cust_extra').upsert({ name:newName, data:custExtra[newName], updated_at:new Date().toISOString() }, { onConflict:'name' })
@@ -6649,9 +6716,9 @@ async function renameCustomer(oldName, newName){
     }
   }catch(e){ console.error('이름변경 서버반영 일부 실패:', e); }
   saveBookings();
-  addCustLog(newName, '고객 이름 변경: '+oldName+' → '+newName);
+  addCustLog(newKey, '고객 이름 변경: '+oldName+' → '+newName);
   _lastCustName=null;
-  showCustDetail(newName, custGroupKey(custBks[0]));
+  showCustDetail(newName, newKey);
 }
 
 // ★ 기존 손님 고객번호 수정 (showCustDetail 상세페이지의 "번호수정" 버튼)
@@ -8486,11 +8553,12 @@ async function showCustDetail(name, groupKey) {
           .order('recorded_at', { ascending: false })
           .limit(50);
         if (recs && recs.length > 0) {
-          if (!custLogs[name]) custLogs[name] = [];
-          custLogs[name] = custLogs[name].filter(l => l.from !== 'smmate');
+          // ★ 이름이 아니라 이 화면이 확정한 curGroupKey로 저장 — 동명이인의 SM 방문기록과 안 섞이게
+          if (!custLogs[curGroupKey]) custLogs[curGroupKey] = [];
+          custLogs[curGroupKey] = custLogs[curGroupKey].filter(l => l.from !== 'smmate');
           recs.forEach(r => {
             if (r.memo && r.memo.trim()) {
-              custLogs[name].push({ dt: r.recorded_at ? r.recorded_at.split(' ')[0] : '', tm: '', text: r.memo.trim(), from: 'smmate' });
+              custLogs[curGroupKey].push({ dt: r.recorded_at ? r.recorded_at.split(' ')[0] : '', tm: '', text: r.memo.trim(), from: 'smmate' });
             }
           });
         }
@@ -8556,8 +8624,9 @@ async function showCustDetail(name, groupKey) {
   const hasSns = allBks.some(b=>b.snsConsent);
   const latestB = allBks[allBks.length-1]; // placeholder 포함 전체에서 최신 예약
   const {label:latestStatus, color:latestColor} = latestB ? getDynamicStatusLabel(latestB) : {label:'전화등록',color:'#9ca3af'};
-  const custMemo = custMemos[name]||'';
-  const logs = (custLogs[name]||[]).slice(0,30); // 최근 30개
+  // ★ curGroupKey(고객번호 기반) 우선 조회, 동명이인이 아닐 때만 옛 이름-키 데이터로 폴백
+  const custMemo = getCustMemoByKey(curGroupKey, name);
+  const logs = getCustLogsByKey(curGroupKey, name).slice(0,30); // 최근 30개
   const safeName = name.replace(/'/g,"\\'");
   const prof = getCustProfile(name);
   const familyInfo = prof.familyInfo || prof.husbandName
@@ -8626,7 +8695,7 @@ async function showCustDetail(name, groupKey) {
             style="width:100%;box-sizing:border-box;border:1.5px solid #c4b5fd;border-radius:8px;padding:7px 10px;font-size:13px;font-family:inherit;resize:vertical;outline:none;background:#fff;color:#333;line-height:1.6"
           >${escHtml(familyInfo)}</textarea>
           <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px">
-            <button onclick="saveCustFamilyEdit('${safeName}','${escHtml(name)}')"
+            <button onclick="saveCustFamilyEdit('${safeName}','${escHtml(name)}','${safeGroupKey}')"
               style="background:#7c3aed;color:#fff;border:none;border-radius:7px;padding:6px 16px;font-size:13px;cursor:pointer;font-weight:700">저장</button>
             <button onclick="cancelCustFamilyEdit('${safeName}')"
               style="background:#f5f3ff;color:#7c3aed;border:1px solid #c4b5fd;border-radius:7px;padding:6px 12px;font-size:13px;cursor:pointer">취소</button>
@@ -8691,7 +8760,7 @@ async function showCustDetail(name, groupKey) {
               </label>
             </div>
             <div style="display:flex;gap:6px;justify-content:flex-end">
-              <button onclick="saveCustExtraFields('${safeName}','${escHtml(name)}')"
+              <button onclick="saveCustExtraFields('${safeName}','${escHtml(name)}','${safeGroupKey}')"
                 style="background:#475569;color:#fff;border:none;border-radius:7px;padding:6px 16px;font-size:12px;cursor:pointer;font-weight:700">저장</button>
               <button onclick="toggleCustExtraEdit('${safeName}')"
                 style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;border-radius:7px;padding:6px 12px;font-size:12px;cursor:pointer">취소</button>
@@ -8722,7 +8791,7 @@ async function showCustDetail(name, groupKey) {
         <textarea id="cust-memo-ta-main" lang="ko"
           placeholder="상담 메모"
           style="width:100%;box-sizing:border-box;border:none;background:transparent;font-size:13px;color:#333;resize:none;outline:none;font-family:inherit;line-height:1.7;overflow:hidden;min-height:40px"
-          oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px';custMemos['${safeName}']=this.value;debouncedSaveCustMemo('${safeName}')"
+          oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px';custMemos['${safeGroupKey}']=this.value;debouncedSaveCustMemo('${safeGroupKey}')"
           onload="this.style.height=this.scrollHeight+'px'"
         >${escHtml(custMemo)}</textarea>
       </div>
@@ -8735,8 +8804,8 @@ async function showCustDetail(name, groupKey) {
         <div style="display:flex;gap:6px;margin-bottom:8px">
           <input id="cust-log-input-${safeName}" type="text" placeholder=""
             style="flex:1;border:1.5px solid #e5e7eb;border-radius:7px;padding:6px 10px;font-size:12px;font-family:inherit;outline:none"
-            onkeydown="if(event.key==='Enter'){addLogFromInput('${safeName}','${escHtml(name)}');event.preventDefault()}">
-          <button onclick="addLogFromInput('${safeName}','${escHtml(name)}')"
+            onkeydown="if(event.key==='Enter'){addLogFromInput('${safeName}','${safeGroupKey}');event.preventDefault()}">
+          <button onclick="addLogFromInput('${safeName}','${safeGroupKey}')"
             style="background:#6366f1;color:#fff;border:none;border-radius:7px;padding:6px 12px;font-size:12px;cursor:pointer;font-weight:700;white-space:nowrap">기록</button>
         </div>
         <!-- 로그 목록 -->
@@ -8784,7 +8853,7 @@ function cancelBooking(bid, custName) {
   b.cancelled = true;
   b.cancelledAt = new Date().toISOString().slice(0,10);
   saveBookings();
-  addCustLog(custName, `예약 취소 — ${fmtDateKo(b.date)} ${fmtTimePlain(b.time)} ${(PRODUCTS[b.product]||PRODUCTS.story).name}`);
+  addCustLog(custGroupKey(b), `예약 취소 — ${fmtDateKo(b.date)} ${fmtTimePlain(b.time)} ${(PRODUCTS[b.product]||PRODUCTS.story).name}`);
   showCustDetail(custName, custGroupKey(b));
 }
 function uncancelBooking(bid, custName) {
@@ -8793,7 +8862,7 @@ function uncancelBooking(bid, custName) {
   b.cancelled = false;
   b.cancelledAt = '';
   saveBookings();
-  addCustLog(custName, `예약 취소 해제 — ${fmtDateKo(b.date)} ${fmtTimePlain(b.time)}`);
+  addCustLog(custGroupKey(b), `예약 취소 해제 — ${fmtDateKo(b.date)} ${fmtTimePlain(b.time)}`);
   showCustDetail(custName, custGroupKey(b));
 }
 
@@ -8825,7 +8894,7 @@ function confirmPostpone() {
   const logMsg = newDate
     ? '예약 연기 — ' + fmtDateKo(b.date) + ' → 예정: ' + fmtDateKo(newDate)
     : '예약 연기 — ' + fmtDateKo(b.date) + ' (날짜 미정)';
-  addCustLog(custName, logMsg);
+  addCustLog(custGroupKey(b), logMsg);
   closePostponeModal();
   showCustDetail(custName, custGroupKey(b));
 }
@@ -8836,7 +8905,7 @@ function unpostponeBooking(bid, custName) {
   b.postponedAt = '';
   b.postponedDate = '';
   saveBookings();
-  addCustLog(custName, '연기 해제 — ' + fmtDateKo(b.date) + '로 복원');
+  addCustLog(custGroupKey(b), '연기 해제 — ' + fmtDateKo(b.date) + '로 복원');
   showCustDetail(custName, custGroupKey(b));
 }
 
@@ -8885,7 +8954,7 @@ function moveToPostponedDate(bid, custName) {
   b.postponedAt = '';
   b.postponedDate = '';
   saveBookings();
-  addCustLog(custName, '연기 날짜 확정 이동 — ' + fmtDateKo(oldDate) + ' → ' + fmtDateKo(newDate));
+  addCustLog(custGroupKey(b), '연기 날짜 확정 이동 — ' + fmtDateKo(oldDate) + ' → ' + fmtDateKo(newDate));
   showCustDetail(custName, custGroupKey(b));
 }
 
@@ -9176,7 +9245,7 @@ function histConfirmDeposit(bid, custName) {
   b.stageChecks[1][0] = true;                          // 입금 확인 체크
   if((b.currentStage||0) < 1) b.currentStage = 1;     // 예약 확정 단계로 진입
   saveBookings();
-  addCustLog(custName, `예약금 입금 확인 — ${fmtPrice(Number(b.payments?.deposit?.amt||0))}`);
+  addCustLog(custGroupKey(b), `예약금 입금 확인 — ${fmtPrice(Number(b.payments?.deposit?.amt||0))}`);
   refreshHistAmt(bid, custName);
 }
 // 잔금 완납 처리 (원클릭)
@@ -9191,7 +9260,7 @@ function histConfirmBalance(bid, custName) {
   if(!b.payments.midterms) b.payments.midterms = [];
   b.payments.midterms.push({id: nextId, amt: remain, method:'계좌이체'});
   saveBookings();
-  addCustLog(custName, `잔금 완납 — ${fmtPrice(remain)}`);
+  addCustLog(custGroupKey(b), `잔금 완납 — ${fmtPrice(remain)}`);
   refreshHistAmt(bid, custName);
   updatePriceUI(bid);
 }
@@ -9272,10 +9341,10 @@ function renderGSearch() {
     // 가족 정보 (새 custProfiles)
     const prof = custProfiles[b.name]||{};
     if((prof.familyInfo||'').toLowerCase().includes(q)) return true;
-    // 고객 메모 (전체)
-    if((custMemos[b.name]||'').toLowerCase().includes(q)) return true;
+    // 고객 메모 (전체) — 이 예약의 실제 custGroupKey 기준(동명이인 혼선 방지)
+    if(getCustMemoByKey(custGroupKey(b), b.name).toLowerCase().includes(q)) return true;
     // 활동 로그
-    if((custLogs[b.name]||[]).some(l=>(l.text||'').toLowerCase().includes(q))) return true;
+    if(getCustLogsByKey(custGroupKey(b), b.name).some(l=>(l.text||'').toLowerCase().includes(q))) return true;
     return false;
   }).sort((a,bb)=>bb.date.localeCompare(a.date)||bb.time.localeCompare(a.time));
   if(!results.length) { el.innerHTML='<div style="text-align:center;color:#bbb;padding:20px">검색 결과 없음</div>'; return; }
@@ -9300,7 +9369,7 @@ function renderGSearch() {
       </div>
       ${b.memo?`<div style="font-size:11px;color:#92400e;background:#fef3c7;border-radius:4px;padding:2px 7px;margin-top:3px">📝 ${escHtml(b.memo.trim().substring(0,60))}</div>`:''}
       ${(custProfiles[b.name]||{}).familyInfo?`<div style="font-size:11px;color:#6b21a8;background:#fdf4ff;border-radius:4px;padding:2px 7px;margin-top:3px">👨‍👩‍👧 ${escHtml((custProfiles[b.name].familyInfo||'').substring(0,60).replace(/\n/g,' · '))}</div>`:''}
-      ${(custMemos[b.name]||'')?`<div style="font-size:11px;color:#92400e;background:#fffde7;border-radius:4px;padding:2px 7px;margin-top:3px">💬 ${escHtml((custMemos[b.name]||'').trim().substring(0,60))}</div>`:''}
+      ${(()=>{ const m = getCustMemoByKey(custGroupKey(b), b.name); return m ? `<div style="font-size:11px;color:#92400e;background:#fffde7;border-radius:4px;padding:2px 7px;margin-top:3px">💬 ${escHtml(m.trim().substring(0,60))}</div>` : ''; })()}
     </div>`;
   }).join('') + `<div style="font-size:11px;color:#bbb;text-align:center;margin-top:8px">총 ${results.length}건 검색됨 — 클릭하면 고객카드로 이동</div>`;
 }
@@ -9870,6 +9939,9 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
     const depositAmt= parseInt(r[mc.deposit])||0;
     const memoTxt   = (r[mc.memo]||'').toString().trim();
     const prodKey   = resolveSmProduct(smProduct, '');
+    // ★ custMemos 키: SM 고객번호가 유효하면 'no:그번호'(동명이인이어도 안 섞임), 없으면 이름으로 폴백
+    const smNoForMemo = Number(smCustNo);
+    const memoKey = (smCustNo && !isNaN(smNoForMemo) && smNoForMemo > 0) ? ('no:' + smNoForMemo) : cleanName;
 
     // 고객 등록 (customers는 앱 전체에서 이름 문자열 배열로 씀 — 상세정보는 custProfiles/custMemos에 저장)
     if (!customers.includes(cleanName)) {
@@ -9881,9 +9953,9 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
       custProfiles[cleanName].phone = phone;
     }
     if (memoTxt) {
-      if (typeof custMemos[cleanName] !== 'string') custMemos[cleanName] = '';
-      if (!custMemos[cleanName].includes(memoTxt)) {
-        custMemos[cleanName] = (custMemos[cleanName] ? custMemos[cleanName] + '\n' : '') + memoTxt;
+      if (typeof custMemos[memoKey] !== 'string') custMemos[memoKey] = '';
+      if (!custMemos[memoKey].includes(memoTxt)) {
+        custMemos[memoKey] = (custMemos[memoKey] ? custMemos[memoKey] + '\n' : '') + memoTxt;
       }
     }
 
@@ -9908,13 +9980,13 @@ function doSmImport(custRows, schedRows, contractRows, histRows, productRows) {
 
     // 이력 메모 custMemos에 추가 (custMemos는 앱 전체에서 이름→문자열 하나로 쓰임 — 배열 아님)
     if (smCustNo && histByNo[smCustNo]) {
-      if (typeof custMemos[cleanName] !== 'string') custMemos[cleanName] = '';
+      if (typeof custMemos[memoKey] !== 'string') custMemos[memoKey] = '';
       histByNo[smCustNo].forEach(h => {
         if (!h.memo) return;
-        if (custMemos[cleanName].includes(h.memo)) return;
+        if (custMemos[memoKey].includes(h.memo)) return;
         const dateStr = (h.date||'').slice(0,10);
         const line = (dateStr ? '[' + dateStr + '] ' : '') + h.memo;
-        custMemos[cleanName] = (custMemos[cleanName] ? custMemos[cleanName] + '\n' : '') + line;
+        custMemos[memoKey] = (custMemos[memoKey] ? custMemos[memoKey] + '\n' : '') + line;
       });
     }
 
